@@ -8,7 +8,7 @@ controller_manager:
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
-    soarm_controller:
+    so_arm_controller:
       type: forward_command_controller/ForwardCommandController
 
 joint_state_broadcaster:
@@ -29,7 +29,7 @@ joint_state_broadcaster:
       - current
       - is_moving
 
-soarm_controller:
+so_arm_controller:
   ros__parameters:
     joints:
       - shoulder_pan_joint

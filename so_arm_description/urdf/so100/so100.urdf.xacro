@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <robot name="so100" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:include filename="$(find soarm_description)/urdf/so100/so100.common.xacro"/>
-  <xacro:include filename="$(find soarm_description)/urdf/so100/so100.control.xacro"/>
+  <xacro:include filename="$(find so_arm_description)/urdf/so100/so100.common.xacro"/>
+  <xacro:include filename="$(find so_arm_description)/urdf/so100/so100.control.xacro"/>
 
   <!-- Arguments (externally settable, default to property values in so100.control.xacro) -->
   <xacro:arg name="serial_port"    default="${serial_port}"/>
@@ -36,21 +36,21 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 ${base_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Base.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Base.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="0 0 ${base_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Base_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Base_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 ${base_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Base.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Base.stl"/>
       </geometry>
     </collision>
   </link>
@@ -65,21 +65,21 @@
     <visual>
       <origin xyz="0 0 0" rpy="${shoulder_offset_rx} 0 ${shoulder_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Rotation_Pitch.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Rotation_Pitch.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="${shoulder_offset_rx} 0 ${shoulder_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Rotation_Pitch_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Rotation_Pitch_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="${shoulder_offset_rx} 0 ${shoulder_offset_rz}"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Rotation_Pitch.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Rotation_Pitch.stl"/>
       </geometry>
     </collision>
   </link>
@@ -94,21 +94,21 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 ${upper_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Upper_Arm.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Upper_Arm.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="0 ${upper_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Upper_Arm_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Upper_Arm_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 ${upper_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Upper_Arm.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Upper_Arm.stl"/>
       </geometry>
     </collision>
   </link>
@@ -123,21 +123,21 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 ${lower_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Lower_Arm.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Lower_Arm.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="0 ${lower_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Lower_Arm_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Lower_Arm_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 ${lower_arm_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Lower_Arm.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Lower_Arm.stl"/>
       </geometry>
     </collision>
   </link>
@@ -152,21 +152,21 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 ${wrist_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Wrist_Pitch_Roll.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="0 ${wrist_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Wrist_Pitch_Roll_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Wrist_Pitch_Roll_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 ${wrist_visual_ry} 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Wrist_Pitch_Roll.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Wrist_Pitch_Roll.stl"/>
       </geometry>
     </collision>
   </link>
@@ -181,14 +181,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="${gripper_visual_rx} 0 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Fixed_Jaw.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Fixed_Jaw.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>
     <visual>
       <origin xyz="0 0 0" rpy="${gripper_visual_rx} 0 0"/>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Fixed_Jaw_Motor.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Fixed_Jaw_Motor.stl"/>
       </geometry>
       <material name="charcoal"/>
     </visual>
@@ -203,7 +203,7 @@
     </inertial>
     <visual>
       <geometry>
-        <mesh filename="package://soarm_description/meshes/so100/Moving_Jaw.stl"/>
+        <mesh filename="package://so_arm_description/meshes/so100/Moving_Jaw.stl"/>
       </geometry>
       <material name="light_grey"/>
     </visual>

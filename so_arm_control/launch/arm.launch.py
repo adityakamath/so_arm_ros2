@@ -5,8 +5,8 @@ Launch the SO-ARM robot_state_publisher for GUI slider visualization.
 Supports both SO100 and SO101 arm variants, selected via the 'model' launch argument.
 
 Example usage:
-    ros2 launch soarm_control arm.launch.py
-    ros2 launch soarm_control arm.launch.py model:=so100
+    ros2 launch so_arm_control arm.launch.py
+    ros2 launch so_arm_control arm.launch.py model:=so100
 """
 
 from launch import LaunchDescription
@@ -40,7 +40,7 @@ def generate_launch_description():
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("soarm_description"),
+                    FindPackageShare("so_arm_description"),
                     "urdf",
                     model,
                     [model, ".urdf.xacro"],
