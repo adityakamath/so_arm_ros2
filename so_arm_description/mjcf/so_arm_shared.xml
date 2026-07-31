@@ -1,0 +1,50 @@
+<!--
+  Variant-independent MJCF content for the SO-100/SO-101 arms: compiler options, shared
+  materials, default classes, and actuators. Mirrors so100.common.xacro/so101.common.xacro's
+  role for the URDF side. Only ever spliced in via so_arm.mjcf.xacro's xacro:include, never
+  loaded directly.
+
+  Joint dynamics and actuator gains (damping, frictionloss, armature, kp, forcerange) are the
+  values TheRobotStudio publishes for the STS3215 servo in the upstream SO-ARM100 Simulation
+  reference (github.com/TheRobotStudio/SO-ARM100, Simulation/SO101/joints_properties.xml) -
+  used as-is for both SO-100 and SO-101, since both run the same servo.
+
+  Actuator names match the ros2_control joint names 1:1 (shoulder_pan_joint, ...,
+  gripper_joint) - identical between SO-100 and SO-101, so this single actuator block is valid
+  for whichever body tree so_arm.mjcf.xacro instantiates. Each <position> uses
+  inheritrange="1" so the actual [lower, upper] limits come from the <joint range="..."/> set
+  in the arm-specific body tree (so100.control.xacro/so101.control.xacro values), not
+  duplicated here.
+-->
+<mujoco model="so_arm_shared" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <compiler angle="radian"/>
+  <option cone="elliptic" impratio="10"/>
+
+  <asset>
+    <material name="light_grey" rgba="0.8 0.8 0.8 1.0"/>
+    <material name="charcoal" rgba="0.15 0.15 0.15 1.0"/>
+    <material name="transparent" rgba="1 0 0 0.3"/>
+  </asset>
+
+  <default>
+    <default class="sts3215">
+      <joint damping="0.60" frictionloss="0.052" armature="0.028"/>
+      <position kp="17.8" kv="0.0" forcerange="-3.35 3.35"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom type="mesh" group="3" material="transparent"/>
+      </default>
+    </default>
+  </default>
+
+  <actuator>
+    <position class="sts3215" name="shoulder_pan_joint" joint="shoulder_pan_joint" inheritrange="1"/>
+    <position class="sts3215" name="shoulder_lift_joint" joint="shoulder_lift_joint" inheritrange="1"/>
+    <position class="sts3215" name="elbow_flex_joint" joint="elbow_flex_joint" inheritrange="1"/>
+    <position class="sts3215" name="wrist_flex_joint" joint="wrist_flex_joint" inheritrange="1"/>
+    <position class="sts3215" name="wrist_roll_joint" joint="wrist_roll_joint" inheritrange="1"/>
+    <position class="sts3215" name="gripper_joint" joint="gripper_joint" inheritrange="1"/>
+  </actuator>
+</mujoco>

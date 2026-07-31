@@ -1,0 +1,3 @@
+[submodule "dependencies/sts_hardware_interface"]
+	path = dependencies/sts_hardware_interface
+	url = https://github.com/adityakamath/sts_hardware_interface.git

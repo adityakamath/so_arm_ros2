@@ -23,7 +23,9 @@
   <xacro:property name="gripper_xyz" value="0.0202 0.0188 -0.0234"/>
   <xacro:property name="gripper_rpy" value="1.5708 -5.24284e-08 -1.41553e-15"/>
 
-  <xacro:property name="gripper_frame_xyz" value="-0.0079 -0.000218121 -0.0981274"/>
-  <xacro:property name="gripper_frame_rpy" value="0 3.14159 0"/>
+  <!-- end_effector_link's rpy (pitch pi/2, not the raw onshape TCP frame) makes its axes X=forward
+       Y=left Z=up like ik_target, instead of the arbitrary CAD TCP orientation. -->
+  <xacro:property name="end_effector_xyz" value="-0.0079 -0.000218121 -0.0981274"/>
+  <xacro:property name="end_effector_rpy" value="0 1.5708 0"/>
 
 </robot>

@@ -1,0 +1,4 @@
+# No apt/rosdep package for python-fcl on this platform; everything else is in package.xml.
+#   pip install -r requirements.txt --break-system-packages
+
+python-fcl

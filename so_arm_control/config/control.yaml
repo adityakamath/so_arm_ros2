@@ -1,0 +1,50 @@
+# Shared between so100 and so101 - identical joint set and joint names.
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # Hz
+    statistics_publish_rate: 0.0
+    enforce_command_limits: true
+    handle_exceptions: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    so_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    gripper_controller:
+      type: parallel_gripper_action_controller/GripperActionController
+
+joint_state_broadcaster:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+      - gripper_joint
+    # No `interfaces` list: mujoco mode only exports position/velocity/effort; JSB auto-discovers.
+
+so_arm_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+    command_interfaces:
+      - position
+      - velocity
+    state_interfaces:
+      - position
+      - velocity
+    interpolate_from_desired_state: false  # start each trajectory from actual measured position
+    allow_partial_joints_goal: true
+    # Inert today - ik_teleop_node/GUI sliders always send zero-velocity endpoints.
+    allow_nonzero_velocity_at_trajectory_end: true
+
+gripper_controller:
+  ros__parameters:
+    joint: gripper_joint

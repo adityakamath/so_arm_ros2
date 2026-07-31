@@ -36,4 +36,9 @@
   <xacro:property name="gripper_xyz" value="-0.0202 0 -0.0244"/>
   <xacro:property name="gripper_rpy" value="${pi/2} 0 ${pi}"/>
 
+  <!-- Estimated from Fixed_Jaw.stl's bbox (no onshape calibration for so100, unlike so101) -
+       reach axis/depth are mesh-verified, but rpy's left/up assignment is unverified (no photo). -->
+  <xacro:property name="end_effector_xyz" value="0.0025 0.0 -0.106"/>
+  <xacro:property name="end_effector_rpy" value="0 ${pi/2} 0"/>
+
 </robot>

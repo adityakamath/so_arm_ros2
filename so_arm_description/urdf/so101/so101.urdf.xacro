@@ -9,6 +9,17 @@
   <xacro:arg name="use_mock"       default="${use_mock}"/>
   <xacro:arg name="use_sync_write" default="${use_sync_write}"/>
 
+  <!-- Simulation backend selection.
+       "real" (default) uses the STS3215 serial hardware plugin below unchanged.
+       "mujoco" swaps the <hardware> plugin for mujoco_ros2_control/MujocoSystemInterface,
+       hosting the MJCF built from mjcf/so_arm.mjcf.xacro (so_arm_config:=so101) - see
+       so_arm_control/launch/control.launch.py. -->
+  <xacro:arg name="ros2_control_hardware_type" default="real"/>
+  <!-- mujoco mode only: path to the xacro-generated MJCF scene, and whether to open the
+       MuJoCo Simulate viewer window. -->
+  <xacro:arg name="mujoco_model" default=""/>
+  <xacro:arg name="mujoco_headless" default="false"/>
+
   <material name="light_grey">
     <color rgba="${light_grey_rgba}"/>
   </material>
@@ -288,8 +299,8 @@
     </collision>
   </link>
 
-  <!-- Gripper frame (dummy link) -->
-  <link name="gripper_frame_link">
+  <!-- End effector frame (dummy link) -->
+  <link name="end_effector_link">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <mass value="1e-9"/>
@@ -321,12 +332,15 @@
 
   <!-- JOINTS -->
 
+  <!-- velocity="1e6" (unreachable) disables JointSaturationLimiter's clipping - the real
+       ceiling comes from max_velocity in the <ros2_control> block below. -->
+
   <joint name="shoulder_pan_joint" type="revolute">
     <parent link="base_link"/>
     <child link="shoulder_link"/>
     <origin xyz="${shoulder_pan_xyz}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${shoulder_pan_lower}" upper="${shoulder_pan_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${shoulder_pan_lower}" upper="${shoulder_pan_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
   <joint name="shoulder_lift_joint" type="revolute">
@@ -334,7 +348,7 @@
     <child link="upper_arm_link"/>
     <origin xyz="${shoulder_lift_xyz}" rpy="${shoulder_lift_rpy}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${shoulder_lift_lower}" upper="${shoulder_lift_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${shoulder_lift_lower}" upper="${shoulder_lift_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
   <joint name="elbow_flex_joint" type="revolute">
@@ -342,7 +356,7 @@
     <child link="lower_arm_link"/>
     <origin xyz="${elbow_flex_xyz}" rpy="${elbow_flex_rpy}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${elbow_flex_lower}" upper="${elbow_flex_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${elbow_flex_lower}" upper="${elbow_flex_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
   <joint name="wrist_flex_joint" type="revolute">
@@ -350,7 +364,7 @@
     <child link="wrist_link"/>
     <origin xyz="${wrist_flex_xyz}" rpy="${wrist_flex_rpy}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${wrist_flex_lower}" upper="${wrist_flex_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${wrist_flex_lower}" upper="${wrist_flex_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
   <joint name="wrist_roll_joint" type="revolute">
@@ -358,34 +372,42 @@
     <child link="gripper_link"/>
     <origin xyz="${wrist_roll_xyz}" rpy="${wrist_roll_rpy}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${wrist_roll_lower}" upper="${wrist_roll_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${wrist_roll_lower}" upper="${wrist_roll_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
-  <joint name="gripper_frame_joint" type="fixed">
+  <joint name="end_effector_joint" type="fixed">
     <parent link="gripper_link"/>
-    <child link="gripper_frame_link"/>
-    <origin xyz="${gripper_frame_xyz}" rpy="${gripper_frame_rpy}"/>
+    <child link="end_effector_link"/>
+    <origin xyz="${end_effector_xyz}" rpy="${end_effector_rpy}"/>
   </joint>
+
 
   <joint name="gripper_joint" type="revolute">
     <parent link="gripper_link"/>
     <child link="moving_jaw_link"/>
     <origin xyz="${gripper_xyz}" rpy="${gripper_rpy}"/>
     <axis xyz="0 0 1"/>
-    <limit lower="${gripper_lower}" upper="${gripper_upper}" effort="${max_torque_nm}" velocity="${max_velocity_rads}"/>
+    <limit lower="${gripper_lower}" upper="${gripper_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
   <!-- ROS 2 CONTROL -->
   <ros2_control name="so101_control" type="system">
     <hardware>
-      <plugin>sts_hardware_interface/STSHardwareInterface</plugin>
-      <param name="serial_port">$(arg serial_port)</param>
-      <param name="baud_rate">${baud_rate}</param>
-      <param name="communication_timeout_ms">100</param>
-      <param name="use_sync_write">$(arg use_sync_write)</param>
-      <param name="enable_mock_mode">$(arg use_mock)</param>
-      <param name="max_velocity_steps">${sts_max_velocity_steps}</param>
-      <param name="reset_states_on_activate">true</param>
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'mujoco'}">
+        <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+        <param name="mujoco_model">$(arg mujoco_model)</param>
+        <param name="headless">$(arg mujoco_headless)</param>
+      </xacro:if>
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <plugin>sts_hardware_interface/STSHardwareInterface</plugin>
+        <param name="serial_port">$(arg serial_port)</param>
+        <param name="baud_rate">${baud_rate}</param>
+        <param name="communication_timeout_ms">100</param>
+        <param name="use_sync_write">$(arg use_sync_write)</param>
+        <param name="enable_mock_mode">$(arg use_mock)</param>
+        <param name="max_velocity_steps">${sts_max_velocity_steps}</param>
+        <param name="reset_states_on_activate">true</param>
+      </xacro:if>
     </hardware>
 
     <joint name="shoulder_pan_joint">
@@ -396,13 +418,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
 
     <joint name="shoulder_lift_joint">
@@ -413,13 +440,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
 
     <joint name="elbow_flex_joint">
@@ -430,13 +462,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
 
     <joint name="wrist_flex_joint">
@@ -447,13 +484,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
 
     <joint name="wrist_roll_joint">
@@ -464,13 +506,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
 
     <joint name="gripper_joint">
@@ -481,13 +528,18 @@
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
+      <command_interface name="velocity"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <state_interface name="voltage"/>
-      <state_interface name="temperature"/>
-      <state_interface name="current"/>
-      <state_interface name="is_moving"/>
+      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
+           know these custom interface names. -->
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
+        <state_interface name="voltage"/>
+        <state_interface name="temperature"/>
+        <state_interface name="current"/>
+        <state_interface name="is_moving"/>
+      </xacro:if>
     </joint>
   </ros2_control>
 

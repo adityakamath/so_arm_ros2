@@ -1,0 +1,15 @@
+# SO-ARM (SO100/SO101) config for joint_trajectory_bridge_node.py - one file, joint names match.
+joint_trajectory_bridge:
+  ros__parameters:
+    input_topic: /joint_commands
+    output_topic: /so_arm_controller/joint_trajectory
+    joint_names:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+    # Rare-edge-case floor only - 0.1 was silently throttling real (velocity-derived) durations.
+    min_time_from_start: 0.01
+    # Protects both GUI sliders and ik_teleop_node's teleop path (both route through this bridge).
+    enable_self_collision_check: true
