@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared self-collision checking, used by joint_trajectory_bridge_node and move_to_pose_node."""
+"""Shared self-collision checking, used by joint_trajectory_bridge_node."""
 
 from urllib.parse import urlparse
 import xml.etree.ElementTree as ElementTree
