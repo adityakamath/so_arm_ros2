@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""SO-ARM (SO100/SO101) control stack: robot_state_publisher, controller_manager, joint_state_broadcaster, so_arm_controller, gripper_controller, joint_trajectory_bridge.
+"""
+SO-ARM (SO100/SO101) control stack, real hardware or MuJoCo.
+
+robot_state_publisher, controller_manager, joint_state_broadcaster, so_arm_controller,
+gripper_controller, joint_trajectory_bridge.
 
 Example usage:
     ros2 launch so_arm_control control.launch.py
@@ -13,25 +17,27 @@ import tempfile
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
+
 def launch_setup(context):
-    model           = LaunchConfiguration('model').perform(context)
-    serial_port     = LaunchConfiguration('serial_port').perform(context)
-    use_mock        = LaunchConfiguration('use_mock').perform(context)
-    use_sim_time    = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
-    hw_type         = LaunchConfiguration('ros2_control_hardware_type').perform(context)
-    mujoco_model    = LaunchConfiguration('mujoco_model').perform(context)
+    model = LaunchConfiguration('model').perform(context)
+    serial_port = LaunchConfiguration('serial_port').perform(context)
+    use_mock = LaunchConfiguration('use_mock').perform(context)
+    use_sim_time = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
+    hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
+    mujoco_model = LaunchConfiguration('mujoco_model').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
-    input_topic     = LaunchConfiguration('input_topic').perform(context)
-    self_collision_check = LaunchConfiguration('self_collision_check').perform(context).lower() in ('true', '1')
+    input_topic = LaunchConfiguration('input_topic').perform(context)
+    self_collision_check = LaunchConfiguration('self_collision_check').perform(context)
+    self_collision_check = self_collision_check.lower() in ('true', '1')
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
-    xacro    = FindExecutable(name='xacro').perform(context)
+    xacro = FindExecutable(name='xacro').perform(context)
 
     # MJCF must land on disk (mesh paths are filesystem-based), unlike robot_description below.
     if mujoco_model:
@@ -143,12 +149,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'serial_port',
             default_value='',
-            description='Serial port override; empty string means use the xacro default (/dev/ttySERVO)',
+            description='Serial port override; empty string means use the xacro default '
+                        '(/dev/ttySERVO)',
         ),
         DeclareLaunchArgument(
             'use_mock',
             default_value='',
-            description='Mock mode override (true/false); empty string means use the xacro default (false)',
+            description='Mock mode override (true/false); empty string means use the xacro '
+                        'default (false)',
         ),
         DeclareLaunchArgument(
             'use_sim_time',
@@ -175,12 +183,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'input_topic',
             default_value='',
-            description='JointState topic for joint_trajectory_bridge; empty uses the yaml default.',
+            description='JointState topic for joint_trajectory_bridge; empty uses the yaml '
+                        'default.',
         ),
         DeclareLaunchArgument(
             'self_collision_check',
             default_value='true',
-            description='Reject self-colliding targets. Default true; disable only for debugging.',
+            description='Reject self-colliding targets. Default true; disable only for '
+                        'debugging.',
         ),
     ]
 

@@ -1,0 +1,49 @@
+# Separate from control.yaml/control.launch.py on purpose - gravity-comp mode needs a
+# different robot_description (operating_mode:=2, effort command interfaces) and bypasses
+# joint_trajectory_bridge/so_arm_controller entirely. See gravity_comp.launch.py.
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    gravity_comp_controller:
+      type: effort_controllers/JointGroupEffortController
+
+joint_state_broadcaster:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+      - gripper_joint
+
+gravity_comp_controller:
+  ros__parameters:
+    # Order matters - gravity_compensation_node publishes its Float64MultiArray positionally
+    # in this exact order, not by name.
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+      - gripper_joint
+    interface_name: effort
+    command_interfaces:
+      - effort
+    state_interfaces:
+      - position
+      - effort
+
+gravity_compensation_node:
+  ros__parameters:
+    output_topic: /gravity_comp_controller/commands
+    end_effector_link: end_effector_link  # same name on both so100 and so101
+    publish_rate: 30.0
+    max_torque_nm: 2.942  # STS3215 rated stall torque - matches so_arm_description's own value
+    max_effort: 0.5  # safety cap on the effort command - raise gradually on real hardware
+    gravity_scale: 0.5  # fraction of computed gravity torque actually commanded - raise gradually
