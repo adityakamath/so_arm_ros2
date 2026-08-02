@@ -55,8 +55,8 @@ def generate_launch_description():
         ),
         Node(
             package='so_arm_control',
-            executable='waypoint_recorder_node',
-            name='waypoint_recorder_node',
+            executable='waypoint_follow_node',
+            name='waypoint_follow_node',
             output='screen',
             parameters=[config],
         ),

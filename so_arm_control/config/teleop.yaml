@@ -51,7 +51,7 @@ joy_teleop:
       service_name: /joint_state_switch_toggle
       buttons: [2]  # X
 
-    # waypoint_recorder_node's services
+    # waypoint_follow_node's services
     record_waypoint:
       type: service
       interface_type: std_srvs/srv/SetBool
@@ -95,12 +95,12 @@ joint_state_switch_node:
     output_topic: /joint_commands  # joint_trajectory_bridge's input
     inputs: ["patrol", "gui", "ik"]  # priority order, first = highest; ik is the fallback
     patrol.topic: /joint_commands_patrol
-    patrol.observe_service: /waypoint_follow  # mirrors waypoint_recorder_node's own service
+    patrol.observe_service: /waypoint_follow  # mirrors waypoint_follow_node's own service
     gui.topic: /joint_commands_gui
     gui.own_service: /joint_state_switch
     ik.topic: /joint_commands_ik
 
-waypoint_recorder_node:
+waypoint_follow_node:
   ros__parameters:
     output_topic: /joint_commands_patrol  # joint_state_switch_node's 'patrol' input
     marker_topic: /waypoint_markers

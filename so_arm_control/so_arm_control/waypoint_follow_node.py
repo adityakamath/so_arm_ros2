@@ -35,7 +35,7 @@ STATE_SERVICE_QOS = QoSProfile(
 )
 
 
-class WaypointRecorderNode(Node):
+class WaypointFollowNode(Node):
     """Records end-effector waypoints via teleop and patrols through them on command."""
 
     # meters - how close the LIVE arm position must get to a waypoint to count as arrived;
@@ -43,7 +43,7 @@ class WaypointRecorderNode(Node):
     _ARRIVAL_EPS = 5e-3
 
     def __init__(self):
-        super().__init__('waypoint_recorder_node')
+        super().__init__('waypoint_follow_node')
 
         self.declare_parameter('robot_description_topic', '/robot_description')
         self.declare_parameter('joint_states_topic', '/joint_states')
@@ -123,7 +123,7 @@ class WaypointRecorderNode(Node):
 
         self._timer = self.create_timer(1.0 / publish_rate, self._on_timer)
         self.get_logger().info(
-            f"waypoint_recorder_node ready, IK-driving '{self._end_effector_link}' -> "
+            f"waypoint_follow_node ready, IK-driving '{self._end_effector_link}' -> "
             f"'{output_topic}'"
         )
 
@@ -332,7 +332,7 @@ class WaypointRecorderNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WaypointRecorderNode()
+    node = WaypointFollowNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

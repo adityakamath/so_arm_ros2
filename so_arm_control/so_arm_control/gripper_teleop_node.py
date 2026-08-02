@@ -34,7 +34,7 @@ class GripperTeleopNode(Node):
         self.declare_parameter('joint_states_topic', '/joint_states')
         self.declare_parameter('gripper_joint', 'gripper_joint')
         self.declare_parameter('action_name', 'gripper_controller/gripper_cmd')
-        # Hz - matches ik_teleop_node/waypoint_recorder_node's own publish_rate.
+        # Hz - matches ik_teleop_node/waypoint_follow_node's own publish_rate.
         self.declare_parameter('send_rate', 30.0)
         # rad - matches gripper_controller's goal_tolerance
         self.declare_parameter('epsilon', 0.01)
