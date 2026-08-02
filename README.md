@@ -15,6 +15,8 @@ This repository is a work in progress and includes experimental and AI-generated
 
 ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, waypoint recording and patrolling (teach-and-repeat), self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or patrol). Also includes (experimental, untested) gravity compensation for manual backdriving and guided one-key motor calibration. Supports real hardware (Feetech STS servos) and MuJoCo simulation.
 
+Control interface note: waypoint recording/following is exposed through services (`/record_waypoint`, `/waypoint_follow`, `/reset_waypoints`) in `waypoint_recorder_node`; this repository does not currently expose a custom MoveToPose action.
+
 ## Packages
 
 - **so_arm_control** — ros2_control hardware interfaces and controller configs, IK teleop / waypoint-patrol / gripper-teleop nodes, self-collision-checked trajectory bridge, and launch files (real hardware or MuJoCo).

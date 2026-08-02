@@ -2,8 +2,6 @@
 """Record end-effector waypoints via teleop and patrol through them (lekiwi-style)."""
 
 import math
-import threading
-import time
 
 # Must be the first non-stdlib import: runs so_arm_utils.kinematics' numpy-ABI sys.path fix
 # before rclpy/sensor_msgs transitively import the wrong numpy.
@@ -12,7 +10,7 @@ from so_arm_control.so_arm_utils.kinematics import _PinocchioIK, KinematicLimite
 from control_msgs.action import ParallelGripperCommand  # noqa: I100
 import rclpy
 from rclpy._rclpy_pybind11.service_introspection import ServiceIntrospectionState
-from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
+from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -25,8 +23,6 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from std_srvs.srv import SetBool
 from visualization_msgs.msg import Marker, MarkerArray
-
-from so_arm_interfaces.action import MoveToPose
 
 # Same ongoing-state QoS as bool_toggle_node/joint_state_switch_node - transient-local so a
 # late-joining observer learns the current mode on connect.
@@ -63,8 +59,6 @@ class WaypointRecorderNode(Node):
         self.declare_parameter('dwell_time', 0.0)
         self.declare_parameter('gripper_joint', 'gripper_joint')
         self.declare_parameter('gripper_action_name', 'gripper_controller/gripper_cmd')
-        self.declare_parameter('move_to_pose_action_name', 'move_to_pose')
-        self.declare_parameter('move_to_pose_default_timeout', 10.0)
         self.declare_parameter('shoulder_pan_joint', 'shoulder_pan_joint')
         self.declare_parameter('shoulder_lift_joint', 'shoulder_lift_joint')
         self.declare_parameter('elbow_flex_joint', 'elbow_flex_joint')
@@ -82,10 +76,6 @@ class WaypointRecorderNode(Node):
         self._dwell_time = float(self.get_parameter('dwell_time').value)
         self._gripper_joint = self.get_parameter('gripper_joint').value
         gripper_action_name = self.get_parameter('gripper_action_name').value
-        move_to_pose_action_name = self.get_parameter('move_to_pose_action_name').value
-        self._move_to_pose_default_timeout = float(
-            self.get_parameter('move_to_pose_default_timeout').value,
-        )
         self._joint_names = [
             self.get_parameter('shoulder_pan_joint').value,
             self.get_parameter('shoulder_lift_joint').value,
@@ -106,8 +96,6 @@ class WaypointRecorderNode(Node):
         self._patrol_active = False
         self._dwelling_until: float | None = None
         self._gripper_sent_leg: int | None = None
-        self._move_to_pose_active = False
-        self._state_lock = threading.Lock()
 
         realtime_qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -128,15 +116,6 @@ class WaypointRecorderNode(Node):
         self._joint_pub = self.create_publisher(JointState, output_topic, 10)
         self._marker_pub = self.create_publisher(MarkerArray, marker_topic, 10)
         self._gripper_client = ActionClient(self, ParallelGripperCommand, gripper_action_name)
-        self._move_to_pose_server = ActionServer(
-            self,
-            MoveToPose,
-            move_to_pose_action_name,
-            execute_callback=self._execute_move_to_pose,
-            goal_callback=self._move_to_pose_goal_cb,
-            cancel_callback=self._move_to_pose_cancel_cb,
-            handle_accepted_callback=self._move_to_pose_handle_accepted_cb,
-        )
 
         self._make_service('/record_waypoint', self._record_cb, introspect=False)
         self._make_service('/waypoint_follow', self._waypoint_follow_cb, introspect=True)
@@ -209,11 +188,6 @@ class WaypointRecorderNode(Node):
     def _waypoint_follow_cb(
         self, request: SetBool.Request, response: SetBool.Response,
     ) -> SetBool.Response:
-        with self._state_lock:
-            if self._move_to_pose_active:
-                response.success = False
-                response.message = 'MoveToPose action is active'
-                return response
         if not request.data:
             self._patrol_active = False
             response.success = True
@@ -271,9 +245,7 @@ class WaypointRecorderNode(Node):
         self._gripper_client.send_goal_async(goal)
 
     def _on_timer(self) -> None:
-        with self._state_lock:
-            move_to_pose_active = self._move_to_pose_active
-        if move_to_pose_active or not self._patrol_active or self._ik is None or not self._waypoints:
+        if not self._patrol_active or self._ik is None or not self._waypoints:
             return
         current = self._limiter.current_state()
         if current is None:
@@ -356,126 +328,6 @@ class WaypointRecorderNode(Node):
             text.text = str(label)
             markers.append(text)
         return markers
-
-    def _move_to_pose_goal_cb(self, goal_request: MoveToPose.Goal) -> GoalResponse:
-        with self._state_lock:
-            if self._move_to_pose_active:
-                self.get_logger().warning('Rejecting MoveToPose goal while another goal is active')
-                return GoalResponse.REJECT
-            if self._patrol_active:
-                self.get_logger().warning('Rejecting MoveToPose goal while waypoint patrol is active')
-                return GoalResponse.REJECT
-        if self._ik is None:
-            self.get_logger().warning('Rejecting MoveToPose goal: IK model not ready yet')
-            return GoalResponse.REJECT
-        return GoalResponse.ACCEPT
-
-    def _move_to_pose_cancel_cb(self, _goal_handle) -> CancelResponse:
-        return CancelResponse.ACCEPT
-
-    def _move_to_pose_handle_accepted_cb(self, goal_handle) -> None:
-        with self._state_lock:
-            self._move_to_pose_active = True
-        goal_thread = threading.Thread(
-            target=goal_handle.execute,
-            daemon=True,
-            name='move_to_pose_action',
-        )
-        goal_thread.start()
-
-    def _execute_move_to_pose(self, goal_handle) -> MoveToPose.Result:
-        result = MoveToPose.Result()
-        try:
-            self._run_move_to_pose(goal_handle, result)
-            return result
-        finally:
-            with self._state_lock:
-                self._move_to_pose_active = False
-
-    def _run_move_to_pose(self, goal_handle, result: MoveToPose.Result) -> None:
-        if self._ik is None:
-            result.success = False
-            result.message = 'IK model not ready yet'
-            goal_handle.abort()
-            return
-
-        goal = goal_handle.request
-        target_xyz = (
-            float(goal.target_pose.pose.position.x),
-            float(goal.target_pose.pose.position.y),
-            float(goal.target_pose.pose.position.z),
-        )
-        target_roll = float(goal.wrist_roll)
-        tolerance = float(goal.position_tolerance) if goal.position_tolerance > 0.0 else self._ARRIVAL_EPS
-        timeout_sec = float(goal.timeout_sec)
-        if timeout_sec <= 0.0:
-            timeout_sec = max(self._move_to_pose_default_timeout, 0.5)
-
-        if goal.target_pose.header.frame_id and goal.target_pose.header.frame_id != self._frame_id:
-            self.get_logger().warning(
-                f"MoveToPose target frame '{goal.target_pose.header.frame_id}' differs from "
-                f"configured frame '{self._frame_id}' - proceeding without transform",
-            )
-
-        start = time.monotonic()
-        publish_period = self._limiter._publish_period
-        while rclpy.ok():
-            if goal_handle.is_cancel_requested:
-                result.success = False
-                result.message = 'MoveToPose goal canceled'
-                goal_handle.canceled()
-                return
-
-            current = self._limiter.current_state()
-            if current is None:
-                time.sleep(publish_period)
-                continue
-
-            warm_start = self._limiter.solve_warm_start(current)
-            solution = self._ik.solve(target_xyz, warm_start, target_roll)
-            if solution is None:
-                if time.monotonic() - start >= timeout_sec:
-                    result.success = False
-                    result.message = 'IK did not converge before timeout'
-                    result.final_position_error = float('inf')
-                    goal_handle.abort()
-                    return
-                time.sleep(publish_period)
-                continue
-
-            solution = self._limiter.kinematic_limit(solution, current)
-            self._limiter.prev_solution = dict(solution)
-
-            joint_state = JointState()
-            joint_state.header.stamp = self.get_clock().now().to_msg()
-            joint_state.name = list(self._joint_names)
-            joint_state.position = [solution[name] for name in self._joint_names]
-            self._joint_pub.publish(joint_state)
-
-            fk_now = self._ik.fk_position(current)
-            position_error = float(math.dist(target_xyz, fk_now))
-
-            feedback = MoveToPose.Feedback()
-            feedback.position_error = position_error
-            goal_handle.publish_feedback(feedback)
-
-            if position_error <= tolerance:
-                if goal.use_gripper:
-                    self._send_gripper_goal(float(goal.gripper_position))
-                result.success = True
-                result.message = 'MoveToPose goal reached'
-                result.final_position_error = position_error
-                goal_handle.succeed()
-                return
-
-            if time.monotonic() - start >= timeout_sec:
-                result.success = False
-                result.message = 'MoveToPose timed out before reaching tolerance'
-                result.final_position_error = position_error
-                goal_handle.abort()
-                return
-
-            time.sleep(publish_period)
 
 
 def main(args=None):
