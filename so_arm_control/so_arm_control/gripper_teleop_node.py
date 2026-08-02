@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ElementTree
 # before rclpy/sensor_msgs transitively import the wrong numpy.
 from so_arm_control.so_arm_utils.kinematics import KinematicLimiter
 
-from control_msgs.action import ParallelGripperCommand  # noqa: I100
+from control_msgs.action import ParallelGripperCommand
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.executors import ExternalShutdownException

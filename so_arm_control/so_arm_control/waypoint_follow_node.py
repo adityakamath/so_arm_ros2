@@ -7,7 +7,7 @@ import math
 # before rclpy/sensor_msgs transitively import the wrong numpy.
 from so_arm_control.so_arm_utils.kinematics import _PinocchioIK, KinematicLimiter
 
-from control_msgs.action import ParallelGripperCommand  # noqa: I100
+from control_msgs.action import ParallelGripperCommand
 import rclpy
 from rclpy._rclpy_pybind11.service_introspection import ServiceIntrospectionState
 from rclpy.action import ActionClient
@@ -150,7 +150,7 @@ class WaypointFollowNode(Node):
             self._ik = _PinocchioIK(
                 msg.data, self._joint_names, self._end_effector_link, (0.0, 0.0, 0.0),
             )
-        except Exception as exc:  # noqa: BLE001 - pinocchio's bound exceptions aren't all typed
+        except Exception as exc:
             self.get_logger().error(f'Failed to build IK model from robot_description: {exc}')
             return
         self._limiter.load_max_velocity(msg.data)

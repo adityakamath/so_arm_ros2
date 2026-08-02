@@ -7,7 +7,7 @@ import math
 # before rclpy/geometry_msgs/sensor_msgs transitively import the wrong numpy.
 from so_arm_control.so_arm_utils.kinematics import _PinocchioIK, KinematicLimiter
 
-from geometry_msgs.msg import TransformStamped, TwistStamped  # noqa: I100
+from geometry_msgs.msg import TransformStamped, TwistStamped
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -131,7 +131,7 @@ class IkTeleopNode(Node):
             self._ik = _PinocchioIK(
                 msg.data, self._joint_names, self._end_effector_link, self._default_orientation,
             )
-        except Exception as exc:  # noqa: BLE001 - pinocchio's bound exceptions aren't all typed
+        except Exception as exc:
             self.get_logger().error(f'Failed to build IK model from robot_description: {exc}')
             return
         configured_reach = float(self.get_parameter('max_target_reach').value)

@@ -10,8 +10,8 @@ from xml.etree import ElementTree
 # sensor_msgs etc. transitively import the wrong numpy.
 sys.path = [p for p in sys.path if '/.local/lib/' not in p]
 
-import numpy as np  # noqa: E402
-import pinocchio as pin  # noqa: E402
+import numpy as np
+import pinocchio as pin
 
 
 def _rpy_to_R(r: float, p: float, y: float) -> np.ndarray:
@@ -100,7 +100,7 @@ class _PinocchioIK:
         self._joint_names = list(joint_names)
         try:
             joint_ids = [self._model.getJointId(name) for name in self._joint_names]
-        except Exception as exc:  # noqa: BLE001 - pinocchio's bound exceptions aren't all typed
+        except Exception as exc:
             raise RuntimeError(
                 f'Joint(s) from {self._joint_names} not found in robot_description: {exc}'
             ) from exc

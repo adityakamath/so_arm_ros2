@@ -5,7 +5,7 @@
 # before rclpy/sensor_msgs transitively import the wrong numpy.
 from so_arm_control.so_arm_utils.kinematics import _PinocchioIK
 
-import rclpy  # noqa: I100
+import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -104,7 +104,7 @@ class GravityCompensationNode(Node):
             self._ik = _PinocchioIK(
                 msg.data, self._joint_names, self._end_effector_link, (0.0, 0.0, 0.0),
             )
-        except Exception as exc:  # noqa: BLE001 - pinocchio's bound exceptions aren't all typed
+        except Exception as exc:
             self.get_logger().error(
                 f'Failed to build dynamics model from robot_description: {exc}'
             )
