@@ -22,7 +22,8 @@
   <exec_depend>pinocchio</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
-  <exec_depend>python3-stl</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>libfcl-dev</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
@@ -38,6 +39,7 @@
   <exec_depend>joy_teleop</exec_depend>
 
   <exec_depend>so_arm_description</exec_depend>
+  <exec_depend>so_arm_interfaces</exec_depend>
   <exec_depend>sts_hardware_interface</exec_depend>
 
   <!-- ros2_control_hardware_type:="mujoco" only - this package starts

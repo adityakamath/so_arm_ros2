@@ -1,4 +1,5 @@
-# No apt/rosdep package for python-fcl on this platform; everything else is in package.xml.
-#   pip install -r requirements.txt --break-system-packages
+# External Python deps not fully covered by rosdep on this platform.
+# Install via: pip install -r requirements.txt --break-system-packages
 
 python-fcl
+numpy-stl

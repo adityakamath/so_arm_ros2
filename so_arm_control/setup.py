@@ -22,7 +22,6 @@ setup(
     license='Apache-2.0',
     extras_require={'test': ['pytest']},
     tests_require=['pytest'],
-    scripts=['scripts/generate_srdf.py', 'scripts/one_key_calibration.py'],
     entry_points={
         'console_scripts': [
             'joint_trajectory_bridge = so_arm_control.joint_trajectory_bridge_node:main',
@@ -32,6 +31,9 @@ setup(
             'joint_state_switch_node = so_arm_control.joint_state_switch_node:main',
             'waypoint_recorder_node = so_arm_control.waypoint_recorder_node:main',
             'gravity_compensation_node = so_arm_control.gravity_compensation_node:main',
+            'move_to_pose = so_arm_control.so_arm_utils.move_to_pose:main',
+            'generate_srdf = so_arm_control.scripts.generate_srdf:main',
+            'one_key_calibration = so_arm_control.scripts.one_key_calibration:main',
         ],
     },
 )

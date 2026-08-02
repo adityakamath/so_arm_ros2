@@ -12,7 +12,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import JointState
-from so_arm_control.so_arm_utils.collision import SelfCollisionChecker
+from so_arm_control.so_arm_utils.self_collision_checker import SelfCollisionChecker
 from std_msgs.msg import String
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -150,11 +150,21 @@ class JointTrajectoryBridge(Node):
             self.get_logger().info(f'Loaded per-joint velocity limits from URDF: {max_velocity}')
 
         if self._collision_check_enabled:
-            self._collision_checker = SelfCollisionChecker(
-                msg.data, collision_margin=self._collision_margin,
-            )
-            n_pairs = len(self._collision_checker.checked_pairs)
-            self.get_logger().info(f'Self-collision checker ready, checking {n_pairs} link pairs.')
+            try:
+                self._collision_checker = SelfCollisionChecker(
+                    msg.data, collision_margin=self._collision_margin,
+                )
+            except RuntimeError as exc:
+                self._collision_checker = None
+                self._collision_check_enabled = False
+                self.get_logger().error(
+                    'Self-collision checker disabled: %s', str(exc),
+                )
+            else:
+                n_pairs = len(self._collision_checker.checked_pairs)
+                self.get_logger().info(
+                    f'Self-collision checker ready, checking {n_pairs} link pairs.'
+                )
 
     def _on_joint_states(self, msg: JointState) -> None:
         # Tracks every reported joint, not just self._joint_names - uncommanded joints (e.g.

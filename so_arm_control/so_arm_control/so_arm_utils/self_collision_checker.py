@@ -5,9 +5,23 @@ from urllib.parse import urlparse
 import xml.etree.ElementTree as ElementTree
 
 from ament_index_python.packages import get_package_share_directory
-import fcl
 import numpy as np
-from stl import mesh as stlmesh
+
+try:
+    import fcl
+except ImportError as exc:
+    fcl = None
+    _FCL_IMPORT_ERROR = exc
+else:
+    _FCL_IMPORT_ERROR = None
+
+try:
+    from stl import mesh as stlmesh
+except ImportError as exc:
+    stlmesh = None
+    _STL_IMPORT_ERROR = exc
+else:
+    _STL_IMPORT_ERROR = None
 
 
 def _rpy_to_R(r: float, p: float, y: float) -> np.ndarray:
@@ -38,6 +52,18 @@ class SelfCollisionChecker:
     # 0.001m sits between measured mesh-precision noise (<0.0008m) and the real upper/lower-arm
     # collision at full elbow extension (0.0043m).
     def __init__(self, urdf_xml: str, collision_margin: float = 0.001):
+        if fcl is None:
+            raise RuntimeError(
+                'python-fcl is required for self-collision checking but is not installed. '
+                'Install it with: pip install -r so_arm_control/requirements.txt '
+                '(or disable self-collision checking via enable_self_collision_check:=false).'
+            ) from _FCL_IMPORT_ERROR
+        if stlmesh is None:
+            raise RuntimeError(
+                'numpy-stl is required for self-collision checking mesh loading but is not installed. '
+                'Install it with: pip install -r so_arm_control/requirements.txt '
+                '(or disable self-collision checking via enable_self_collision_check:=false).'
+            ) from _STL_IMPORT_ERROR
         self._collision_margin = collision_margin
         # enable_contact + a small margin: a bare is_collision would reject on the slightest
         # mesh-precision graze even with real clearance - identical every call, so built once.

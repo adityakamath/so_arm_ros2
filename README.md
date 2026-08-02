@@ -26,7 +26,7 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 - **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, `parallel_gripper_controller`, and `effort_controllers` (gravity compensation only)
 - **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `dependencies/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK solver shared by teleop and waypoint patrol
-- **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** (pip, no rosdep key — see `so_arm_control/requirements.txt`) + **python3-stl** (apt): Mesh-based self-collision checking
+- **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
 - **[joy](https://github.com/ros-drivers/joystick_drivers)** / **[joy_teleop](https://index.ros.org/p/joy_teleop/)**: Joystick teleoperation
 - **[mujoco_ros2_control](https://github.com/ros-controls/mujoco_ros2_control)** (`sudo apt install ros-kilted-mujoco-ros2-control`): MuJoCo simulation backend, `ros2_control_hardware_type:=mujoco` only
 
@@ -36,10 +36,17 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 cd ~/ros2_ws/src
 git clone --recurse-submodules https://github.com/adityakamath/so_arm_ros2.git
 cd ~/ros2_ws
-pip install -r src/so_arm_ros2/so_arm_control/requirements.txt --break-system-packages
+./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
 colcon build --packages-up-to so_arm_control
 source install/setup.bash
 ros2 launch so_arm_control control.launch.py
+```
+
+If `python-fcl` is missing, `joint_trajectory_bridge` now logs an explicit dependency error and
+automatically disables self-collision checking instead of crashing. Install dependencies with:
+
+```bash
+./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
 ```
 
 If you already have `sts_hardware_interface` elsewhere in this workspace, `--recurse-submodules` is unnecessary — colcon will find either copy. Otherwise, initialize it after the fact with `git submodule update --init` from `so_arm_ros2/`.
@@ -116,11 +123,11 @@ ros2 launch so_arm_control gravity_comp.launch.py
 
 ## Calibration (Experimental, Untested)
 
-`scripts/one_key_calibration.py` is a guided CLI wrapper around `sts_hardware_interface`'s `/one_key_calibration` service (position-mode joints only) — re-centers each motor's EEPROM midpoint to wherever it's currently physically positioned. Auto-detects the serial port and motor IDs from `/controller_manager`'s `robot_description`, engages `/emergency_stop` for safe manual repositioning during the process, and writes a record to `~/.config/so_arm_control/calibration/`.
+`one_key_calibration` is a guided CLI wrapper around `sts_hardware_interface`'s `/one_key_calibration` service (position-mode joints only) — re-centers each motor's EEPROM midpoint to wherever it's currently physically positioned. Auto-detects the serial port and motor IDs from `/controller_manager`'s `robot_description`, engages `/emergency_stop` for safe manual repositioning during the process, and writes a record to `~/.config/so_arm_control/calibration/`.
 
 ```bash
-ros2 run so_arm_control one_key_calibration.py --dry-run   # detection only, no hardware writes
-ros2 run so_arm_control one_key_calibration.py
+ros2 run so_arm_control one_key_calibration --dry-run   # detection only, no hardware writes
+ros2 run so_arm_control one_key_calibration
 ```
 
 `sts_hardware_interface` documents this calibration path itself as untested on physical hardware — treat with the same caution as gravity compensation above.
@@ -132,8 +139,8 @@ so_arm_ros2/
 ├── so_arm_control/          # ros2_control config, teleop/waypoint-patrol/gripper nodes, launch files
 │   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml, gravity_comp.yaml
 │   ├── launch/                # control.launch.py, teleop.launch.py, gravity_comp.launch.py
-│   ├── scripts/                # generate_srdf.py, one_key_calibration.py (untested)
 │   └── so_arm_control/
+│       ├── scripts/            # one_key_calibration + generate_srdf utilities
 │       ├── gravity_compensation_node.py  # untested, see Gravity Compensation above
 │       └── so_arm_utils/       # Shared IK/kinematic-limiting + self-collision-checking helpers
 ├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)

@@ -6,21 +6,22 @@ Derived from SelfCollisionChecker's own adjacency/rest-pose analysis - keeps the
 with the FCL-based runtime checker instead of an independent guess. Re-run whenever the URDF's
 collision geometry changes.
 
-Usage: python3 generate_srdf.py <model> <urdf_path> <output_srdf_path>
+Usage: ros2 run so_arm_control generate_srdf -- <model> <urdf_path> <output_srdf_path>
 """
+
 import sys
 
-from so_arm_control.so_arm_utils.collision import SelfCollisionChecker
+from so_arm_control.so_arm_utils.self_collision_checker import SelfCollisionChecker
 
-SRDF_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" ?>
+SRDF_TEMPLATE = """<?xml version=\"1.0\" encoding=\"UTF-8\" ?>
 <!--This does not replace URDF, and is not an extension of URDF.
     This is a format for representing semantic information about the robot structure.
     A URDF file must exist for this robot as well, where the joints and the links that are
     referenced are defined
 -->
-<robot name="{model}">
-  <group name="manipulator">
-    <chain base_link="base_link" tip_link="end_effector_link" />
+<robot name=\"{model}\">
+  <group name=\"manipulator\">
+    <chain base_link=\"base_link\" tip_link=\"end_effector_link\" />
   </group>
 {disable_collisions}</robot>
 """
@@ -49,7 +50,7 @@ def generate(model: str, urdf_path: str, output_path: str) -> None:
             continue  # still needs runtime checking - leave it enabled
         jname = adjacent_joint.get(frozenset((a, b)))
         reason = 'Adjacent' if jname else 'Default'
-        lines.append(f'  <disable_collisions link1="{a}" link2="{b}" reason="{reason}" />')
+        lines.append(f'  <disable_collisions link1=\"{a}\" link2=\"{b}\" reason=\"{reason}\" />')
 
     srdf = SRDF_TEMPLATE.format(
         model=model, disable_collisions='\n'.join(lines) + '\n' if lines else '',
@@ -62,5 +63,17 @@ def generate(model: str, urdf_path: str, output_path: str) -> None:
     )
 
 
-if __name__ == '__main__':
+def main() -> int:
+    if len(sys.argv) < 4:
+        print(
+            'Usage: ros2 run so_arm_control generate_srdf -- '
+            '<model> <urdf_path> <output_srdf_path>',
+            file=sys.stderr,
+        )
+        return 2
     generate(*sys.argv[1:4])
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
