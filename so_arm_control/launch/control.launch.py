@@ -32,8 +32,7 @@ def launch_setup(context):
     mujoco_model = LaunchConfiguration('mujoco_model').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     input_topic = LaunchConfiguration('input_topic').perform(context)
-    self_collision_check = LaunchConfiguration('self_collision_check').perform(context)
-    self_collision_check = self_collision_check.lower() in ('true', '1')
+    self_collision_check = LaunchConfiguration('self_collision_check').perform(context).strip()
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
@@ -104,7 +103,10 @@ def launch_setup(context):
 
     bridge_config = f'{pkg_ctrl}/config/joint_trajectory_bridge.yaml'
     bridge_overrides = {'input_topic': input_topic} if input_topic else {}
-    bridge_overrides['enable_self_collision_check'] = self_collision_check
+    if self_collision_check:
+        bridge_overrides['enable_self_collision_check'] = (
+            self_collision_check.lower() in ('true', '1')
+        )
 
     joint_trajectory_bridge_node = Node(
         package='so_arm_control',
@@ -188,9 +190,9 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'self_collision_check',
-            default_value='true',
-            description='Reject self-colliding targets. Default true; disable only for '
-                        'debugging.',
+            default_value='',
+            description='Optional override for enable_self_collision_check in '
+                        'joint_trajectory_bridge.yaml; empty uses yaml value.',
         ),
     ]
 

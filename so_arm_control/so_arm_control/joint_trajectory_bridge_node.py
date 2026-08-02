@@ -22,8 +22,8 @@ class JointTrajectoryBridge(Node):
 
     # rad - path-sample spacing for _check_path; check() costs ~9ms/call, so this must stay
     # coarse enough that a full-speed tick (~0.148 rad @ 85%-capped 4.43 rad/s, 30Hz) is cheap.
-    _PATH_CHECK_RESOLUTION = 0.05
-    _PATH_CHECK_MAX_SAMPLES = 6  # bounds a rare large jump (e.g. startup) to ~53ms
+    _PATH_CHECK_RESOLUTION = 0.02
+    _PATH_CHECK_MAX_SAMPLES = 14  # stricter sweep catches thin collision pockets in slider moves
     _SCAN_STEPS = 8  # resolution of the boundary scans in _scan_to_boundary(_group)
     _RESOLVE_ROUNDS = 4  # retries in _resolve_collisions before rejecting the target
 
@@ -38,7 +38,8 @@ class JointTrajectoryBridge(Node):
         self.declare_parameter('joint_names', Parameter.Type.STRING_ARRAY)
         self.declare_parameter('min_time_from_start', 0.1)
         self.declare_parameter('enable_self_collision_check', True)
-        self.declare_parameter('collision_margin', 0.001)
+        self.declare_parameter('collision_margin', 0.01)
+        self.declare_parameter('intersection_margin', 0.0)
 
         joint_names_param = self.get_parameter_or(
             'joint_names', Parameter('joint_names', Parameter.Type.STRING_ARRAY, [])
@@ -56,6 +57,7 @@ class JointTrajectoryBridge(Node):
             self.get_parameter('enable_self_collision_check').value
         )
         self._collision_margin = float(self.get_parameter('collision_margin').value)
+        self._intersection_margin = float(self.get_parameter('intersection_margin').value)
         self._collision_checker: SelfCollisionChecker | None = None
         input_topic = self.get_parameter('input_topic').value
         output_topic = self.get_parameter('output_topic').value
@@ -152,7 +154,9 @@ class JointTrajectoryBridge(Node):
         if self._collision_check_enabled:
             try:
                 self._collision_checker = SelfCollisionChecker(
-                    msg.data, collision_margin=self._collision_margin,
+                    msg.data,
+                    collision_margin=self._collision_margin,
+                    intersection_margin=self._intersection_margin,
                 )
             except RuntimeError as exc:
                 self._collision_checker = None

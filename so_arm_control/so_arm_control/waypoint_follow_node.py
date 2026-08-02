@@ -252,11 +252,28 @@ class WaypointFollowNode(Node):
             return
 
         target = self._waypoints[self._current_leg]
+        fk_now = self._ik.fk_position(current)
+        if math.dist(target['xyz'], fk_now) < self._ARRIVAL_EPS:
+            if self._gripper_sent_leg != self._current_leg:
+                self._send_gripper_goal(target['gripper'])
+                self._gripper_sent_leg = self._current_leg
+            if self._dwell_time <= 0.0:
+                self._advance_leg()
+                return
+            now = self.get_clock().now().nanoseconds / 1e9
+            if self._dwelling_until is None:
+                self._dwelling_until = now + self._dwell_time
+            elif now >= self._dwelling_until:
+                self._dwelling_until = None
+                self._advance_leg()
+            return
+
         warm_start = self._limiter.solve_warm_start(current)
         solution = self._ik.solve(target['xyz'], warm_start, target['roll'])
         if solution is None:
             self.get_logger().warning(
-                'No IK solution converged for current waypoint', throttle_duration_sec=2.0,
+                f'No IK solution converged for waypoint {self._current_leg}',
+                throttle_duration_sec=2.0,
             )
             return
         solution = self._limiter.kinematic_limit(solution, current)
@@ -268,23 +285,6 @@ class WaypointFollowNode(Node):
         joint_state.name = list(self._joint_names)
         joint_state.position = [solution[name] for name in self._joint_names]
         self._joint_pub.publish(joint_state)
-
-        fk_now = self._ik.fk_position(current)
-        if math.dist(target['xyz'], fk_now) >= self._ARRIVAL_EPS:
-            self._dwelling_until = None
-            return
-        if self._gripper_sent_leg != self._current_leg:
-            self._send_gripper_goal(target['gripper'])
-            self._gripper_sent_leg = self._current_leg
-        if self._dwell_time <= 0.0:
-            self._advance_leg()
-            return
-        now = self.get_clock().now().nanoseconds / 1e9
-        if self._dwelling_until is None:
-            self._dwelling_until = now + self._dwell_time
-        elif now >= self._dwelling_until:
-            self._dwelling_until = None
-            self._advance_leg()
 
     def _publish_markers(self) -> None:
         array = MarkerArray()

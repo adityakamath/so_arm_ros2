@@ -313,6 +313,68 @@
     </inertial>
   </link>
 
+  <!-- SO-101 wrist camera mount (Hex-Nut Recess, 32x32 UVC module form factor). -->
+  <link name="wrist_camera_mount_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.02"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="light_grey"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="wrist_camera_body_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.015"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
+      </geometry>
+      <material name="charcoal"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Upstream-aligned wrist camera frame (+X forward, -Y right, +Z up). -->
+  <link name="wrist_camera_frame">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+
+
+  <!-- REP-103 optical frame (+Z forward, +X right, +Y down). -->
+  <link name="wrist_camera_optical_frame">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-9"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+
   <!-- Moving jaw link -->
   <link name="moving_jaw_link">
     <inertial>
@@ -384,6 +446,30 @@
     <parent link="gripper_link"/>
     <child link="end_effector_link"/>
     <origin xyz="${end_effector_xyz}" rpy="${end_effector_rpy}"/>
+  </joint>
+
+  <joint name="wrist_camera_mount_joint" type="fixed">
+    <parent link="gripper_link"/>
+    <child link="wrist_camera_mount_link"/>
+    <origin xyz="${wrist_camera_mount_xyz}" rpy="${wrist_camera_mount_rpy}"/>
+  </joint>
+
+  <joint name="wrist_camera_body_joint" type="fixed">
+    <parent link="wrist_camera_mount_link"/>
+    <child link="wrist_camera_body_link"/>
+    <origin xyz="${wrist_camera_body_xyz}" rpy="${wrist_camera_body_rpy}"/>
+  </joint>
+
+  <joint name="wrist_camera_frame_joint" type="fixed">
+    <parent link="gripper_link"/>
+    <child link="wrist_camera_frame"/>
+    <origin xyz="${wrist_camera_frame_xyz}" rpy="${wrist_camera_frame_rpy}"/>
+  </joint>
+
+  <joint name="wrist_camera_optical_joint" type="fixed">
+    <parent link="wrist_camera_frame"/>
+    <child link="wrist_camera_optical_frame"/>
+    <origin xyz="0 0 0" rpy="${wrist_camera_optical_rpy}"/>
   </joint>
 
 

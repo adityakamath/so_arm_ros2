@@ -144,6 +144,8 @@
       <mesh name="sts3215_03a_no_horn_v1" file="$(find so_arm_description)/meshes/so101/sts3215_03a_no_horn_v1.stl"/>
       <mesh name="wrist_roll_pitch_so101_v2" file="$(find so_arm_description)/meshes/so101/wrist_roll_pitch_so101_v2.stl"/>
       <mesh name="wrist_roll_follower_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_roll_follower_so101_v1.stl"/>
+      <mesh name="wrist_camera_mount_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_mount_so101_v1.stl"/>
+      <mesh name="wrist_camera_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_so101_v1.stl"/>
       <mesh name="moving_jaw_so101_v1" file="$(find so_arm_description)/meshes/so101/moving_jaw_so101_v1.stl"/>
     </asset>
 
@@ -236,6 +238,22 @@
                         mesh="wrist_roll_follower_so101_v1" material="light_grey"/>
                   <geom class="collision" pos="0 -0.000218214 0.000949706" quat="0 1 0 0"
                         mesh="wrist_roll_follower_so101_v1" material="light_grey"/>
+
+                  <body name="wrist_camera_mount_link" pos="-0.0150 0.0240 -0.0315" quat="0.499798 -0.5002 0.499802 -0.5002">
+                    <inertial pos="0 0 0" mass="0.02" diaginertia="1e-5 1e-5 1e-5"/>
+                    <geom class="visual" pos="0 0 0" quat="1 0 0 0"
+                      mesh="wrist_camera_mount_so101_v1" material="light_grey"/>
+                    <geom class="collision" pos="0 0 0" quat="1 0 0 0"
+                      mesh="wrist_camera_mount_so101_v1" material="light_grey"/>
+
+                    <body name="wrist_camera_body_link" pos="-0.04941 -0.03813 0.0175" quat="0.379787 -0.596458 -0.379788 -0.596456">
+                      <inertial pos="0 0 0" mass="0.015" diaginertia="1e-5 1e-5 1e-5"/>
+                      <geom class="visual" pos="0 0 0" quat="1 0 0 0"
+                        mesh="wrist_camera_so101_v1" material="charcoal"/>
+                      <geom class="collision" pos="0 0 0" quat="1 0 0 0"
+                        mesh="wrist_camera_so101_v1" material="charcoal"/>
+                    </body>
+                  </body>
                   <!-- TCP marker, matches URDF's fixed end_effector_joint (end_effector_xyz/rpy
                        in so101.common.xacro) - not the ros2_so_arm MJCF's site, which does not
                        match that URDF's own rpy. -->
@@ -269,6 +287,9 @@
         <exclude body1="lower_arm_link" body2="wrist_link"/>
         <exclude body1="wrist_link" body2="gripper_link"/>
         <exclude body1="gripper_link" body2="moving_jaw_link"/>
+        <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
+        <exclude body1="gripper_link" body2="wrist_camera_body_link"/>
       </contact>
       <worldbody>
         <xacro:so_arm101_body/>

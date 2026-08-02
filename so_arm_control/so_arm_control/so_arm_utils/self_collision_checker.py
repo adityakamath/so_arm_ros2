@@ -49,9 +49,14 @@ def _origin_xyz_rpy(origin) -> tuple:
 class SelfCollisionChecker:
     """Checks a candidate joint configuration for self-intersecting links."""
 
-    # 0.001m sits between measured mesh-precision noise (<0.0008m) and the real upper/lower-arm
-    # collision at full elbow extension (0.0043m).
-    def __init__(self, urdf_xml: str, collision_margin: float = 0.001):
+    # collision_margin inflates the broad-phase proximity gate; intersection_margin is the
+    # minimum penetration depth treated as a real collision.
+    def __init__(
+        self,
+        urdf_xml: str,
+        collision_margin: float = 0.01,
+        intersection_margin: float = 0.0,
+    ):
         if fcl is None:
             raise RuntimeError(
                 'python-fcl is required for self-collision checking but is not installed. '
@@ -65,6 +70,7 @@ class SelfCollisionChecker:
                 '(or disable self-collision checking via enable_self_collision_check:=false).'
             ) from _STL_IMPORT_ERROR
         self._collision_margin = collision_margin
+        self._intersection_margin = intersection_margin
         # enable_contact + a small margin: a bare is_collision would reject on the slightest
         # mesh-precision graze even with real clearance - identical every call, so built once.
         self._request = fcl.CollisionRequest(enable_contact=True)
@@ -112,8 +118,11 @@ class SelfCollisionChecker:
         adjacent_joint = {
             frozenset((j['parent'], j['child'])): jname for jname, j in self._joints.items()
         }
+        # Parent-child adjacency set used to apply a less aggressive penetration threshold for
+        # kinematic neighbors that may have intentional shallow overlap at nominal poses.
+        self._adjacent_pairs = set(adjacent_joint)
 
-        self._link_models: dict[str, fcl.BVHModel] = {}
+        self._link_models: dict[str, object] = {}
         # (local-frame center, radius) per link - a bounding-sphere reject before the far more
         # expensive mesh-vs-mesh FCL test (see _collide).
         self._link_bounds: dict[str, tuple] = {}
@@ -136,7 +145,7 @@ class SelfCollisionChecker:
 
         # Persistent per-link CollisionObjects (transform updated in place) - rebuilding one
         # fresh per check() call costs about as much as the collision test itself.
-        self._link_objects: dict[str, fcl.CollisionObject] = {
+        self._link_objects: dict[str, object] = {
             link: fcl.CollisionObject(model, fcl.Transform())
             for link, model in self._link_models.items()
         }
@@ -161,6 +170,10 @@ class SelfCollisionChecker:
             if jname is None:
                 if (a, b) not in always_touching_at_rest:
                     self.checked_pairs.append((a, b))
+                continue
+            # Fixed adjacent links are a rigid assembly; any overlap/touch between them is
+            # intentional and should never be treated as a runtime self-collision.
+            if self._joints[jname]['type'] == 'fixed':
                 continue
             # Adjacent pair: a rest-pose check alone would wrongly exclude a pair that only
             # collides once its joint bends far enough - sweep its full limit range instead.
@@ -240,7 +253,13 @@ class SelfCollisionChecker:
             fcl.collide(self._link_objects[a], self._link_objects[b], self._request, result)
             if result.is_collision:
                 depth = max((c.penetration_depth for c in result.contacts), default=0.0)
-                if depth > self._collision_margin:
+                threshold = self._intersection_margin
+                if frozenset((a, b)) in self._adjacent_pairs:
+                    # Adjacent links can have tiny nominal overlap from mesh/contact modeling;
+                    # keep strict overlap handling for non-adjacent pairs, but require deeper
+                    # penetration for parent-child pairs to avoid over-clamping at rest.
+                    threshold = max(threshold, self._collision_margin)
+                if depth > threshold:
                     colliding.append((a, b))
         return colliding
 
