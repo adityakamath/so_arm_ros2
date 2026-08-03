@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Joystick raw value -> ParallelGripperCommand action client for gripper_controller."""
+"""Joystick raw value or GUI joint_commands -> ParallelGripperCommand action client."""
 
 import xml.etree.ElementTree as ElementTree
 
@@ -24,12 +24,13 @@ def _remap(raw: float, lo: float, hi: float) -> float:
 
 
 class GripperTeleopNode(Node):
-    """Remap a raw -1..1 joystick value to gripper_joint's range, velocity/accel-capped."""
+    """Drive gripper_joint from whichever of joystick/GUI published most recently, accel-capped."""
 
     def __init__(self):
         super().__init__('gripper_teleop_node')
 
         self.declare_parameter('gripper_teleop_topic', 'gripper_teleop')
+        self.declare_parameter('joint_commands_topic', 'joint_commands')
         self.declare_parameter('robot_description_topic', '/robot_description')
         self.declare_parameter('joint_states_topic', '/joint_states')
         self.declare_parameter('gripper_joint', 'gripper_joint')
@@ -42,6 +43,7 @@ class GripperTeleopNode(Node):
         self.declare_parameter('max_acceleration', 40.0)
 
         gripper_teleop_topic = self.get_parameter('gripper_teleop_topic').value
+        joint_commands_topic = self.get_parameter('joint_commands_topic').value
         robot_description_topic = self.get_parameter('robot_description_topic').value
         joint_states_topic = self.get_parameter('joint_states_topic').value
         self._gripper_joint = self.get_parameter('gripper_joint').value
@@ -52,6 +54,12 @@ class GripperTeleopNode(Node):
 
         self._limit: tuple | None = None
         self._raw: float | None = None
+        self._raw_stamp = None
+        # Absolute gripper_joint target, when present, from joint_state_switch_node's output -
+        # only non-empty while GUI sliders (or another future source) are the active input, since
+        # ik_teleop_node/patrol never put gripper_joint on that topic (patrol sends its own goals).
+        self._gui_position: float | None = None
+        self._gui_stamp = None
         self._last_sent: float | None = None
         self._limiter = KinematicLimiter([self._gripper_joint], send_rate, max_acceleration)
 
@@ -62,6 +70,9 @@ class GripperTeleopNode(Node):
         )
         self.create_subscription(
             Float64, gripper_teleop_topic, self._on_gripper_teleop, realtime_qos,
+        )
+        self.create_subscription(
+            JointState, joint_commands_topic, self._on_joint_commands, realtime_qos,
         )
         self.create_subscription(
             JointState, joint_states_topic, self._limiter.on_joint_states, realtime_qos,
@@ -79,7 +90,8 @@ class GripperTeleopNode(Node):
         self.create_timer(1.0 / send_rate, self._on_timer)
 
         self.get_logger().info(
-            f"Bridging '{gripper_teleop_topic}' -> '{action_name}' for '{self._gripper_joint}'"
+            f"Bridging '{gripper_teleop_topic}' / '{joint_commands_topic}' -> '{action_name}' "
+            f"for '{self._gripper_joint}'"
         )
 
     def _on_robot_description(self, msg: String) -> None:
@@ -109,12 +121,30 @@ class GripperTeleopNode(Node):
 
     def _on_gripper_teleop(self, msg: Float64) -> None:
         self._raw = msg.data
+        self._raw_stamp = self.get_clock().now()
+
+    def _on_joint_commands(self, msg: JointState) -> None:
+        if self._gripper_joint not in msg.name:
+            return
+        self._gui_position = msg.position[msg.name.index(self._gripper_joint)]
+        self._gui_stamp = self.get_clock().now()
 
     def _on_timer(self) -> None:
-        if self._raw is None or self._limit is None:
+        if self._limit is None:
             return
         lower, upper = self._limit
-        target = _remap(self._raw, lower, (lower + upper) / 2)
+
+        # Whichever source published most recently wins - lets GUI sliders and the joystick
+        # share the gripper without one having to know about the other's active/inactive state.
+        use_gui = self._gui_stamp is not None and (
+            self._raw_stamp is None or self._gui_stamp > self._raw_stamp
+        )
+        if use_gui:
+            target = min(max(self._gui_position, lower), upper)
+        elif self._raw is not None:
+            target = _remap(self._raw, lower, (lower + upper) / 2)
+        else:
+            return
 
         current = self._limiter.current_state()
         limited = self._limiter.kinematic_limit({self._gripper_joint: target}, current)

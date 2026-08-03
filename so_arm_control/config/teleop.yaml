@@ -27,6 +27,8 @@ joy_teleop:
           value: 'base_footprint'  # verified URDF root, not base_link
 
     # Raw -1..1 passthrough - gripper_teleop_node remaps per-model from /robot_description.
+    # gripper_teleop_node also picks up gripper_joint from /joint_commands when GUI sliders are
+    # the active joint_state_switch input, using whichever source published most recently.
     gripper_teleop:
       type: topic
       interface_type: std_msgs/msg/Float64
