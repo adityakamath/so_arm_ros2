@@ -34,8 +34,8 @@
   <xacro:property name="wrist_camera_mount_rpy" value="-1.5708 -0.0008 -1.5708"/>
 
   <!-- Camera body mesh pose and scale relative to wrist_camera_mount_link. -->
-     <xacro:property name="wrist_camera_body_xyz" value="-0.04941 -0.03813 0.0175"/>
-     <xacro:property name="wrist_camera_body_rpy" value="0 -1.5708 -2.0076"/>
+  <xacro:property name="wrist_camera_body_xyz" value="-0.04941 -0.03813 0.0175"/>
+  <xacro:property name="wrist_camera_body_rpy" value="0 -1.5708 -2.0076"/>
 
   <!-- Non-REP-103 camera frame that follows upstream so-frame alignment. -->
   <xacro:property name="wrist_camera_frame_xyz" value="0.0025 0.0675 -0.0062"/>
