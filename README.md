@@ -26,7 +26,7 @@ Control interface note: waypoint recording/following is exposed through services
 
 - **[ROS 2](https://docs.ros.org/en/kilted/)**: Tested with Kilted, but should work on other ROS 2 distributions
 - **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, `parallel_gripper_controller`, and `effort_controllers` (gravity compensation only)
-- **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `dependencies/`): Hardware interface for Feetech STS servos
+- **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `modules/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK solver shared by teleop and waypoint patrol
 - **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
 - **[joy](https://github.com/ros-drivers/joystick_drivers)** / **[joy_teleop](https://index.ros.org/p/joy_teleop/)**: Joystick teleoperation
@@ -36,7 +36,7 @@ Control interface note: waypoint recording/following is exposed through services
 
 ```bash
 cd ~/ros2_ws/src
-git clone --recurse-submodules https://github.com/adityakamath/so_arm_ros2.git
+git clone https://github.com/adityakamath/so_arm_ros2.git
 cd ~/ros2_ws
 ./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
 colcon build --packages-up-to so_arm_control
@@ -51,7 +51,7 @@ automatically disables self-collision checking instead of crashing. Install depe
 ./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
 ```
 
-If you already have `sts_hardware_interface` elsewhere in this workspace, `--recurse-submodules` is unnecessary — colcon will find either copy. Otherwise, initialize it after the fact with `git submodule update --init` from `so_arm_ros2/`.
+`sts_hardware_interface` is a submodule under `modules/`, left uninitialized by a plain clone. If you already have it elsewhere in this workspace (e.g. via `lekiwi_ros2/modules/`), leave it uninitialized here — colcon will find that copy. Otherwise, pull it in with `git submodule update --init --recursive` from `so_arm_ros2/` (`--recursive` also fetches its own `external/SCServo_Linux` submodule).
 
 In a separate terminal, once `control.launch.py` is up:
 
@@ -146,8 +146,8 @@ so_arm_ros2/
 │       ├── gravity_compensation_node.py  # untested, see Gravity Compensation above
 │       └── so_arm_utils/       # Shared IK/kinematic-limiting + self-collision-checking helpers
 ├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
-└── dependencies/
-    └── sts_hardware_interface/  # Feetech STS servo hardware interface (git submodule)
+└── modules/
+    └── sts_hardware_interface/  # Feetech STS servo hardware interface (git submodule, uninitialized unless needed)
 ```
 
 ## License
