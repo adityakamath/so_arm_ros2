@@ -22,8 +22,6 @@ def launch_setup(context):
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     input_topic = LaunchConfiguration('input_topic').perform(context)
     self_collision_check = LaunchConfiguration('self_collision_check').perform(context).strip()
-    arm_operating_mode = LaunchConfiguration('arm_operating_mode').perform(context)
-    gripper_operating_mode = LaunchConfiguration('gripper_operating_mode').perform(context)
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
@@ -50,8 +48,6 @@ def launch_setup(context):
         xacro_cmd += f' serial_port:={serial_port}'
     if use_mock:
         xacro_cmd += f' use_mock:={use_mock}'
-    xacro_cmd += f' arm_operating_mode:={arm_operating_mode}'
-    xacro_cmd += f' gripper_operating_mode:={gripper_operating_mode}'
     if hw_type == 'mujoco':
         xacro_cmd += (
             f' ros2_control_hardware_type:={hw_type}'
@@ -180,16 +176,6 @@ def generate_launch_description():
             'self_collision_check',
             default_value='',
             description='Override enable_self_collision_check; empty uses yaml value.',
-        ),
-        DeclareLaunchArgument(
-            'arm_operating_mode',
-            default_value='0',
-            description='Arm joints 1-5: 0=Position 1=Velocity 2=PWM/Effort.',
-        ),
-        DeclareLaunchArgument(
-            'gripper_operating_mode',
-            default_value='0',
-            description='Gripper joint 6: 0=Position 1=Velocity 2=PWM/Effort.',
         ),
     ]
 

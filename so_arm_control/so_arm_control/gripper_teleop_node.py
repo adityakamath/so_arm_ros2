@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Joystick raw value or GUI joint_commands -> ParallelGripperCommand action client."""
+"""Joystick/GUI -> ParallelGripperCommand action client, with optional compliant shaping."""
 
 import xml.etree.ElementTree as ElementTree
 
@@ -41,6 +41,9 @@ class GripperTeleopNode(Node):
         self.declare_parameter('epsilon', 0.01)
         # rad/s^2 - same convention and default as the rest of the arm; see KinematicLimiter.
         self.declare_parameter('max_acceleration', 40.0)
+        # rad per unit of load - compliant setpoint-shaping gain, 0.0 = disabled. Uncalibrated,
+        # tune empirically starting from 0.
+        self.declare_parameter('effort_gain', 0.0)
 
         gripper_teleop_topic = self.get_parameter('gripper_teleop_topic').value
         joint_commands_topic = self.get_parameter('joint_commands_topic').value
@@ -51,15 +54,16 @@ class GripperTeleopNode(Node):
         send_rate = float(self.get_parameter('send_rate').value)
         self._epsilon = float(self.get_parameter('epsilon').value)
         max_acceleration = float(self.get_parameter('max_acceleration').value)
+        self._effort_gain = float(self.get_parameter('effort_gain').value)
 
         self._limit: tuple | None = None
         self._raw: float | None = None
         self._raw_stamp = None
-        # Absolute gripper_joint target, when present, from joint_state_switch_node's output -
-        # only non-empty while GUI sliders (or another future source) are the active input, since
-        # ik_teleop_node/patrol never put gripper_joint on that topic (patrol sends its own goals).
+        # Absolute target from joint_state_switch_node's output, when GUI sliders are active -
+        # ik_teleop_node/patrol never put gripper_joint on that topic.
         self._gui_position: float | None = None
         self._gui_stamp = None
+        self._current_effort: float | None = None
         self._last_sent: float | None = None
         self._limiter = KinematicLimiter([self._gripper_joint], send_rate, max_acceleration)
 
@@ -75,7 +79,7 @@ class GripperTeleopNode(Node):
             JointState, joint_commands_topic, self._on_joint_commands, realtime_qos,
         )
         self.create_subscription(
-            JointState, joint_states_topic, self._limiter.on_joint_states, realtime_qos,
+            JointState, joint_states_topic, self._on_joint_states, realtime_qos,
         )
         robot_description_qos = QoSProfile(
             depth=1,
@@ -129,6 +133,11 @@ class GripperTeleopNode(Node):
         self._gui_position = msg.position[msg.name.index(self._gripper_joint)]
         self._gui_stamp = self.get_clock().now()
 
+    def _on_joint_states(self, msg: JointState) -> None:
+        self._limiter.on_joint_states(msg)
+        if self._gripper_joint in msg.name and msg.effort:
+            self._current_effort = msg.effort[msg.name.index(self._gripper_joint)]
+
     def _on_timer(self) -> None:
         if self._limit is None:
             return
@@ -145,6 +154,11 @@ class GripperTeleopNode(Node):
             target = _remap(self._raw, lower, (lower + upper) / 2)
         else:
             return
+
+        # Compliant setpoint-shaping (Mode 0 only): retreat the target as sensed load rises,
+        # instead of driving into it regardless - a software approximation of impedance control.
+        if self._effort_gain and self._current_effort is not None:
+            target = min(max(target - self._effort_gain * self._current_effort, lower), upper)
 
         current = self._limiter.current_state()
         limited = self._limiter.kinematic_limit({self._gripper_joint: target}, current)

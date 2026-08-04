@@ -123,6 +123,17 @@ ros2 launch so_arm_control gravity_comp.launch.py
 
 `max_effort` and `gravity_scale` (`so_arm_control/config/gravity_comp.yaml`) both default to a conservative `0.5`. The torque→effort conversion (`torque_nm / max_torque_nm`, the STS3215's rated stall torque) is a first-order approximation that hasn't been validated against a real servo's low-speed PWM-to-torque behavior — raise both gradually while testing, never at once.
 
+## Gripper Compliance (Experimental, Untested)
+
+`gripper_teleop_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default
+`0.0`) shifts the commanded gripper position away from the raw joystick/GUI target in proportion
+to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it —
+a software approximation of impedance control that stays entirely in Mode 0 (Position): the
+onboard servo PID remains the fast inner loop, so a stalled host still just holds position rather
+than pushing indefinitely. This is the recommended way to get compliant gripper behavior — no
+need for the gripper to run in PWM/effort mode at all. Sign and magnitude are uncalibrated —
+start at `0.0` and raise gradually, same posture as `gravity_scale`/`max_effort`.
+
 ## Calibration (Experimental, Untested)
 
 `one_key_calibration` is a guided CLI wrapper around `sts_hardware_interface`'s `/one_key_calibration` service (position-mode joints only) — re-centers each motor's EEPROM midpoint to wherever it's currently physically positioned. Auto-detects the serial port and motor IDs from `/controller_manager`'s `robot_description`, engages `/emergency_stop` for safe manual repositioning during the process, and writes a record to `~/.config/so_arm_control/calibration/`.

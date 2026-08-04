@@ -26,9 +26,8 @@ joy_teleop:
         header-frame_id:
           value: 'base_footprint'  # verified URDF root, not base_link
 
-    # Raw -1..1 passthrough - gripper_teleop_node remaps per-model from /robot_description.
-    # gripper_teleop_node also picks up gripper_joint from /joint_commands when GUI sliders are
-    # the active joint_state_switch input, using whichever source published most recently.
+    # Raw -1..1 passthrough - gripper_teleop_node remaps per-model, and also picks up gripper
+    # position from /joint_commands when GUI sliders are the active joint_state_switch input.
     gripper_teleop:
       type: topic
       interface_type: std_msgs/msg/Float64
@@ -111,6 +110,12 @@ waypoint_follow_node:
     number_of_loops: 0  # 0 = loop forever, N>0 = exactly N total passes
     max_acceleration: 40.0  # rad/s^2 - independently tunable from ik_teleop_node's own cap
     dwell_time: 1.0  # seconds - pause at each waypoint before advancing to the next leg
+
+gripper_teleop_node:
+  ros__parameters:
+    # rad per unit of normalized load - compliant setpoint-shaping, disabled by default. Tune
+    # empirically (sign included) starting from 0 if enabling - see README's Gripper Compliance.
+    effort_gain: 0.0
 
 ik_teleop_node:
   ros__parameters:
