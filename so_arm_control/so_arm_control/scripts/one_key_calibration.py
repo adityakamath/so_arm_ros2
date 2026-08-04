@@ -81,6 +81,32 @@ def _scan_serial_ports() -> List[str]:
     return unique
 
 
+def _detect_serial_port_by_disconnect() -> str:
+    """Ask the user to unplug the arm USB cable to identify its serial port."""
+    print('Serial port auto-detection: scanning connected ports...')
+    before = set(_scan_serial_ports())
+    if before:
+        print('  Found: %s' % ', '.join(sorted(before)))
+    else:
+        print('  No USB serial ports found yet.')
+    input('  >>> Unplug the arm USB cable, then press Enter...')
+    after = set(_scan_serial_ports())
+    disappeared = sorted(before - after)
+    if len(disappeared) == 1:
+        port = disappeared[0]
+        input('  Detected port: %s  >>>  Reconnect the USB cable, then press Enter...' % port)
+        return port
+    if len(disappeared) == 0:
+        raise RuntimeError(
+            'No port disappeared after unplugging. '
+            'Try again or pass --serial-port explicitly.'
+        )
+    raise RuntimeError(
+        'Multiple ports disappeared: %s. '
+        'Pass --serial-port explicitly.' % ', '.join(disappeared)
+    )
+
+
 def _extract_hw_config_from_robot_description(robot_description: str) -> tuple[str | None, List[int], List[int]]:
     root = ET.fromstring(robot_description)
     serial_port: str | None = None
@@ -362,14 +388,14 @@ def main() -> int:
             if len(candidates) == 1:
                 serial_port = candidates[0]
                 node.get_logger().warn('Could not detect serial port from robot_description, using single /dev candidate: %s' % (serial_port,))
-            elif len(candidates) > 1:
-                node.get_logger().error('Serial port auto-detection ambiguous. Candidates: %s. Use --serial-port.' % (candidates,))
-                return 11
             else:
-                node.get_logger().error(
-                    'No serial port detected from robot_description and no /dev ttyUSB/ttyACM candidate found.'
-                )
-                return 12
+                # Multiple or zero candidates: use disconnect-detection
+                try:
+                    serial_port = _detect_serial_port_by_disconnect()
+                    node.get_logger().info('Detected serial port by disconnect: %s' % (serial_port,))
+                except RuntimeError as exc:
+                    node.get_logger().error(str(exc))
+                    return 11
 
         if not expected_motor_ids and detected_motor_ids:
             expected_motor_ids = detected_motor_ids
