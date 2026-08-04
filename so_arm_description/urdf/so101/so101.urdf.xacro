@@ -8,21 +8,12 @@
   <xacro:arg name="serial_port"    default="${serial_port}"/>
   <xacro:arg name="use_mock"       default="${use_mock}"/>
   <xacro:arg name="use_sync_write" default="${use_sync_write}"/>
-  <!-- 0=Position, 1=Velocity, 2=PWM/Effort - see sts_hardware_interface's operating modes.
-       Changing this changes which <command_interface> below is generated (position+velocity
-       vs. effort), so it can't be switched live - it's baked into robot_description at
-       hardware-interface startup. gravity_comp.launch.py overrides both to 2. -->
-  <xacro:arg name="arm_operating_mode"     default="${arm_operating_mode}"/>     <!-- Joints 1-5 (shoulder → wrist) -->
-  <xacro:arg name="gripper_operating_mode" default="${gripper_operating_mode}"/> <!-- Joint 6 (gripper) -->
+  <xacro:arg name="arm_operating_mode"     default="${arm_operating_mode}"/>     <!-- 0=Position 1=Velocity 2=PWM; arm joints 1-5; baked at startup -->
+  <xacro:arg name="gripper_operating_mode" default="${gripper_operating_mode}"/> <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
 
-  <!-- Simulation backend selection.
-       "real" (default) uses the STS3215 serial hardware plugin below unchanged.
-       "mujoco" swaps the <hardware> plugin for mujoco_ros2_control/MujocoSystemInterface,
-       hosting the MJCF built from mjcf/so_arm.mjcf.xacro (so_arm_config:=so101) - see
-       so_arm_control/launch/control.launch.py. -->
+  <!-- "real" uses STS serial plugin; "mujoco" swaps for mujoco_ros2_control/MujocoSystemInterface. -->
   <xacro:arg name="ros2_control_hardware_type" default="real"/>
-  <!-- mujoco mode only: path to the xacro-generated MJCF scene, and whether to open the
-       MuJoCo Simulate viewer window. -->
+  <!-- mujoco only -->
   <xacro:arg name="mujoco_model" default=""/>
   <xacro:arg name="mujoco_headless" default="false"/>
 
@@ -509,8 +500,7 @@
       <param name="max_position">${shoulder_pan_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           arm_operating_mode arg's own comment above for why this can't be a runtime switch. -->
+      <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -521,8 +511,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>
@@ -538,8 +527,7 @@
       <param name="max_position">${shoulder_lift_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           arm_operating_mode arg's own comment above for why this can't be a runtime switch. -->
+      <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -550,8 +538,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>
@@ -567,8 +554,7 @@
       <param name="max_position">${elbow_flex_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           arm_operating_mode arg's own comment above for why this can't be a runtime switch. -->
+      <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -579,8 +565,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>
@@ -596,8 +581,7 @@
       <param name="max_position">${wrist_flex_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           arm_operating_mode arg's own comment above for why this can't be a runtime switch. -->
+      <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -608,8 +592,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>
@@ -625,8 +608,7 @@
       <param name="max_position">${wrist_roll_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           arm_operating_mode arg's own comment above for why this can't be a runtime switch. -->
+      <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -637,8 +619,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>
@@ -654,10 +635,7 @@
       <param name="max_position">${gripper_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
-      <!-- Mode 0/1: position+velocity; Mode 2 (PWM/Effort): effort only - see the
-           gripper_operating_mode arg's own comment above for why this can't be a runtime switch.
-           Note: when gripper_operating_mode=2, switch gripper_controller to
-           effort_controllers/JointGroupEffortController in control.yaml. -->
+      <!-- cmd interfaces depend on gripper_operating_mode -->
       <xacro:if value="${'$(arg gripper_operating_mode)' == '2'}">
         <command_interface name="effort"/>
       </xacro:if>
@@ -668,8 +646,7 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
       <state_interface name="effort"/>
-      <!-- Real-hardware-only telemetry: mujoco_ros2_control/MujocoSystemInterface doesn't
-           know these custom interface names. -->
+      <!-- real hardware only -->
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <state_interface name="voltage"/>
         <state_interface name="temperature"/>

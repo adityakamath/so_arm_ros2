@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-SO-ARM (SO100/SO101) control stack, real hardware or MuJoCo.
-
-robot_state_publisher, controller_manager, joint_state_broadcaster, so_arm_controller,
-gripper_controller, joint_trajectory_bridge.
-
-Example usage:
-    ros2 launch so_arm_control control.launch.py
-    ros2 launch so_arm_control control.launch.py model:=so100
-    ros2 launch so_arm_control control.launch.py ros2_control_hardware_type:=mujoco
-    ros2 launch so_arm_control control.launch.py input_topic:=/joint_commands
-"""
+"""SO-ARM control stack: robot_state_publisher, controller_manager, JSB, so_arm_controller, gripper_controller, joint_trajectory_bridge."""
 
 import subprocess
 import tempfile
@@ -149,66 +138,58 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'model',
             default_value='so101',
-            description='Robot model to launch: so100 or so101',
+            description='so100 or so101',
             choices=['so100', 'so101'],
         ),
         DeclareLaunchArgument(
             'serial_port',
             default_value='',
-            description='Serial port override; empty string means use the xacro default '
-                        '(/dev/ttySERVO)',
+            description='Serial port; empty uses xacro default (/dev/ttySERVO)',
         ),
         DeclareLaunchArgument(
             'use_mock',
             default_value='',
-            description='Mock mode override (true/false); empty string means use the xacro '
-                        'default (false)',
+            description='true/false; empty uses xacro default (false)',
         ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use /clock from a simulator instead of system time.',
+            description='Use /clock from a simulator.',
         ),
         DeclareLaunchArgument(
             'ros2_control_hardware_type',
             default_value='real',
-            description='"real" for the STS hardware plugin, "mujoco" for '
-                        'mujoco_ros2_control/MujocoSystemInterface.',
+            description='real or mujoco',
         ),
         DeclareLaunchArgument(
             'mujoco_model',
             default_value='',
-            description='Pre-built MJCF path; empty means xacro-process it from model. '
-                        'Only used when ros2_control_hardware_type:="mujoco".',
+            description='Pre-built MJCF path; empty = xacro-generate. mujoco only.',
         ),
         DeclareLaunchArgument(
             'mujoco_headless',
             default_value='false',
-            description='[mujoco only] Run without the MuJoCo Simulate viewer window.',
+            description='mujoco only: suppress viewer window.',
         ),
         DeclareLaunchArgument(
             'input_topic',
             default_value='',
-            description='JointState topic for joint_trajectory_bridge; empty uses the yaml '
-                        'default.',
+            description='JointState input topic; empty uses yaml default.',
         ),
         DeclareLaunchArgument(
             'self_collision_check',
             default_value='',
-            description='Optional override for enable_self_collision_check in '
-                        'joint_trajectory_bridge.yaml; empty uses yaml value.',
+            description='Override enable_self_collision_check; empty uses yaml value.',
         ),
         DeclareLaunchArgument(
             'arm_operating_mode',
             default_value='0',
-            description='Operating mode for arm joints 1-5: 0=Position, 1=Velocity, 2=PWM/Effort.',
+            description='Arm joints 1-5: 0=Position 1=Velocity 2=PWM/Effort.',
         ),
         DeclareLaunchArgument(
             'gripper_operating_mode',
             default_value='0',
-            description='Operating mode for gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort. '
-                        'When set to 2, switch gripper_controller type to '
-                        'effort_controllers/JointGroupEffortController in control.yaml.',
+            description='Gripper joint 6: 0=Position 1=Velocity 2=PWM/Effort.',
         ),
     ]
 

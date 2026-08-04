@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-SO-ARM (SO100/SO101) gravity-compensation stack, separate from control.launch.py.
-
-operating_mode is baked into robot_description at hardware-interface startup (see
-so101.urdf.xacro's operating_mode arg), so a gravity-comp session can't run alongside normal
-position-mode teleop/patrol in the same launch. Stop this before starting control.launch.py,
-and vice versa.
-
-Example usage:
-    ros2 launch so_arm_control gravity_comp.launch.py
-    ros2 launch so_arm_control gravity_comp.launch.py model:=so100
-    ros2 launch so_arm_control gravity_comp.launch.py use_mock:=true
-"""
+"""SO-ARM gravity-compensation stack (all joints mode 2). Mutually exclusive with control.launch.py."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
@@ -92,25 +80,23 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'model',
             default_value='so101',
-            description='Robot model to launch: so100 or so101',
+            description='so100 or so101',
             choices=['so100', 'so101'],
         ),
         DeclareLaunchArgument(
             'serial_port',
             default_value='',
-            description='Serial port override; empty string means use the xacro default '
-                        '(/dev/ttySERVO)',
+            description='Serial port; empty uses xacro default (/dev/ttySERVO)',
         ),
         DeclareLaunchArgument(
             'use_mock',
             default_value='',
-            description='Mock mode override (true/false); empty string means use the xacro '
-                        'default (false)',
+            description='true/false; empty uses xacro default (false)',
         ),
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use /clock from a simulator instead of system time.',
+            description='Use /clock from a simulator.',
         ),
     ]
 
