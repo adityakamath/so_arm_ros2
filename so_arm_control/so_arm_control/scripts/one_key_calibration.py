@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter_client import AsyncParametersClient
+from rclpy.parameter_client import AsyncParameterClient
 
 from sts_hardware_interface.srv import OneKeyCalibration
 from std_srvs.srv import SetBool
@@ -168,7 +168,7 @@ class OneKeyCalibrationClient(Node):
         self._estop_client = self.create_client(SetBool, '/emergency_stop')
 
     def discover_from_controller_manager(self, controller_manager_node: str, timeout_sec: float) -> tuple[str | None, List[int], List[int]]:
-        client = AsyncParametersClient(self, controller_manager_node)
+        client = AsyncParameterClient(self, controller_manager_node)
         if not client.wait_for_service(timeout_sec=timeout_sec):
             raise TimeoutError(
                 f"Parameter service for '{controller_manager_node}' not available within {timeout_sec:.1f}s"
