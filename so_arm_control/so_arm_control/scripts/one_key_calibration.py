@@ -169,7 +169,7 @@ class OneKeyCalibrationClient(Node):
 
     def discover_from_controller_manager(self, controller_manager_node: str, timeout_sec: float) -> tuple[str | None, List[int], List[int]]:
         client = AsyncParameterClient(self, controller_manager_node)
-        if not client.wait_for_service(timeout_sec=timeout_sec):
+        if not client.wait_for_services(timeout_sec=timeout_sec):
             raise TimeoutError(
                 f"Parameter service for '{controller_manager_node}' not available within {timeout_sec:.1f}s"
             )
@@ -353,7 +353,7 @@ def main() -> int:
             )
 
         if detected_mode0_motor_ids:
-            node.get_logger().info('Detected mode-0 motor IDs: %s', detected_mode0_motor_ids)
+            node.get_logger().info('Detected mode-0 motor IDs: %s' % (detected_mode0_motor_ids,))
 
         serial_port = args.serial_port.strip() if args.serial_port else ''
         if not serial_port and detected_serial_port:
@@ -389,9 +389,9 @@ def main() -> int:
         if not expected_motor_ids and detected_motor_ids:
             expected_motor_ids = detected_motor_ids
 
-        node.get_logger().info('Using serial port: %s', serial_port)
+        node.get_logger().info('Using serial port: %s' % (serial_port,))
         if expected_motor_ids:
-            node.get_logger().info('Using expected motor IDs: %s', expected_motor_ids)
+            node.get_logger().info('Using expected motor IDs: %s' % (expected_motor_ids,))
 
         if args.dry_run:
             node.get_logger().info(
@@ -425,9 +425,9 @@ def main() -> int:
             node.get_logger().info('Engaging /emergency_stop before calibration for safe manual movement...')
             estop_res = node.set_emergency_stop(True, args.wait_timeout)
             if not estop_res.success:
-                node.get_logger().error('Failed to engage emergency stop: %s', estop_res.message)
+                node.get_logger().error('Failed to engage emergency stop: %s' % (estop_res.message,))
                 return 7
-            node.get_logger().info('Emergency stop active: %s', estop_res.message)
+            node.get_logger().info('Emergency stop active: %s' % (estop_res.message,))
 
         if not args.yes:
             _wait_for_enter(
@@ -441,9 +441,9 @@ def main() -> int:
 
         response = node.call(motor_ids, args.response_timeout)
         if response.accepted:
-            node.get_logger().info('Calibration accepted: %s', response.message)
+            node.get_logger().info('Calibration accepted: %s' % (response.message,))
         else:
-            node.get_logger().error('Calibration rejected: %s', response.message)
+            node.get_logger().error('Calibration rejected: %s' % (response.message,))
             return 4
 
         if not args.skip_sweep_step:
@@ -462,9 +462,9 @@ def main() -> int:
             node.get_logger().info('Releasing /emergency_stop...')
             estop_res = node.set_emergency_stop(False, args.wait_timeout)
             if not estop_res.success:
-                node.get_logger().error('Failed to release emergency stop: %s', estop_res.message)
+                node.get_logger().error('Failed to release emergency stop: %s' % (estop_res.message,))
                 return 8
-            node.get_logger().info('Emergency stop released: %s', estop_res.message)
+            node.get_logger().info('Emergency stop released: %s' % (estop_res.message,))
 
         calibrated_ids = motor_ids if motor_ids else expected_motor_ids
         record_path = _save_calibration_record(
@@ -476,7 +476,7 @@ def main() -> int:
             accepted=response.accepted,
             message=response.message,
         )
-        node.get_logger().info('Wrote calibration record: %s', str(record_path))
+        node.get_logger().info('Wrote calibration record: %s' % (str(record_path,)))
 
         node.get_logger().info('Guided calibration workflow finished.')
         return 0
@@ -485,7 +485,7 @@ def main() -> int:
         node.get_logger().error(str(exc))
         return 5
     except Exception as exc:  # pragma: no cover - defensive CLI guard
-        node.get_logger().error('Calibration call failed: %s', str(exc))
+        node.get_logger().error('Calibration call failed: %s' % (str(exc,)))
         return 6
     finally:
         node.destroy_node()
