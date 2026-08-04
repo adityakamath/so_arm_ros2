@@ -6,8 +6,7 @@ import sys
 from xml.etree import ElementTree
 
 # pinocchio needs numpy 1.x ABI; drop this machine's user-site numpy 2.x before importing it.
-# This module must be the first non-stdlib import in any file that uses it, before rclpy/
-# sensor_msgs etc. transitively import the wrong numpy.
+# Must be the first non-stdlib import in any file using this module.
 sys.path = [p for p in sys.path if '/.local/lib/' not in p]
 
 import numpy as np

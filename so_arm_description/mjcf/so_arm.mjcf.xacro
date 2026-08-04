@@ -1,24 +1,14 @@
 <?xml version="1.0"?>
-<!-- Parametric SO-100/SO-101 MJCF assembly (mujoco_ros2_control equivalent of
-     so100.urdf.xacro / so101.urdf.xacro): defines the so_arm100_body / so_arm101_body macros,
-     selected by so_arm_config, and when standalone:=true (default) invokes the selected one
-     in worldbody plus a floor/lighting scene. Mirrors pantilt_ros2's pantilt.mjcf.xacro
-     (pt_description/mjcf/pantilt.mjcf.xacro) pattern.
+<!-- Parametric SO-100/SO-101 MJCF assembly (mujoco_ros2_control equivalent of so100/so101
+     urdf.xacro): so_arm100_body/so_arm101_body macros, selected by so_arm_config; standalone
+     mode (default) wraps the selected one in worldbody + floor/lighting.
 
-     Standalone: xacro so_arm.mjcf.xacro so_arm_config:=so101 > /tmp/so_arm.xml
-     so_arm_control/launch/control.launch.py runs the same command at launch time.
+     Body positions/inertials come from our own URDF sources, not ros2_so_arm's or MuJoCo
+     Menagerie's MJCF - those use a different joint-axis convention (plus an extra SO-101
+     gripper-pitch offset) that would desync real-hardware and sim position commands.
 
-     Body positions/orientations and inertials are taken from so_arm_description's own
-     URDF sources (so100.common.xacro/so100.urdf.xacro and so101.common.xacro/
-     so101.urdf.xacro) - not ported wholesale from ros2_so_arm's or MuJoCo Menagerie's MJCF
-     files, which use a different (rotated) joint-axis convention for SO-100 and, for SO-101,
-     an extra ~10 degree gripper-pitch offset not present in the upstream CAD-exported URDF.
-     Using the same numbers as our own URDF keeps position commands identical in meaning
-     between the real STS hardware and this MuJoCo simulation.
-
-     Joint dynamics/actuators live in so_arm_shared.xml (variant-independent - joint names are
-     identical between SO-100 and SO-101). Only meshes, body geometry, joint ranges and contact
-     excludes differ per variant, and are declared below the corresponding xacro:if branch. -->
+     Joint dynamics/actuators live in so_arm_shared.xml (variant-independent). Usage:
+     xacro so_arm.mjcf.xacro so_arm_config:=so101 > /tmp/so_arm.xml -->
 <mujoco xmlns:xacro="http://www.ros.org/wiki/xacro" model="so_arm">
   <xacro:arg name="so_arm_config" default="so101"/>
   <xacro:arg name="standalone" default="true"/>
@@ -44,10 +34,9 @@
       <mesh name="Moving_Jaw" file="$(find so_arm_description)/meshes/so100/Moving_Jaw.stl"/>
     </asset>
 
-    <!-- Joint origins/inertials below are so100.common.xacro / so100.urdf.xacro's values,
-         verbatim - each joint rotates about its own local Z (so100's "all-Z" convention),
-         with the child body's pos/quat carrying the compensating rotation so the mesh lands
-         in the same place a naturally-oriented joint axis would. -->
+    <!-- Values verbatim from so100's URDF - joints rotate about local Z ("all-Z" convention),
+         with the child body's pos/quat compensating so meshes land where a naturally-oriented
+         joint axis would. -->
     <xacro:macro name="so_arm100_body">
       <body name="base_link">
         <inertial pos="0 0 0" mass="1.0" diaginertia="0.01 0.01 0.01"/>
@@ -91,9 +80,8 @@
                   <joint name="wrist_roll_joint" axis="0 0 1" range="-3.14158 3.14158" class="sts3215"/>
                   <inertial pos="0.00552377 -0.000483583 -0.0280167" mass="0.0929859"
                             diaginertia="5.03136e-05 2.72961e-05 4.64098e-05"/>
-                  <!-- No collision geom here or on moving_jaw_link below - MuJoCo-specific
-                       simplification (avoids gripper contact-solver jitter); unlike the
-                       URDF/FCL collision set, which does cover both jaws. -->
+                  <!-- No collision geom here or on moving_jaw_link (avoids contact-solver
+                       jitter) - unlike URDF/FCL, which covers both jaws. -->
                   <geom mesh="Fixed_Jaw" material="light_grey" class="visual" quat="0.707107 0.707107 0 0"/>
                   <geom mesh="Fixed_Jaw_Motor" material="charcoal" class="visual" quat="0.707107 0.707107 0 0"/>
 
@@ -149,10 +137,8 @@
       <mesh name="moving_jaw_so101_v1" file="$(find so_arm_description)/meshes/so101/moving_jaw_so101_v1.stl"/>
     </asset>
 
-    <!-- Body tree/inertials ported from ros2_so_arm's so_arm101_description/mjcf/so_arm101.xml
-         (verified to match so101.common.xacro/so101.urdf.xacro's own joint origins and
-         inertials for every joint except gripper_joint, which is recomputed below from our
-         own URDF's gripper_rpy - see file header). -->
+    <!-- Ported from ros2_so_arm's so_arm101.xml (verified to match our own URDF for every
+         joint except gripper_joint, recomputed below from gripper_rpy - see file header). -->
     <xacro:macro name="so_arm101_body">
       <body name="base_link">
         <inertial pos="0.0137179 -5.19711e-05 0.0334843" mass="0.147"
@@ -254,14 +240,12 @@
                         mesh="wrist_camera_so101_v1" material="charcoal"/>
                     </body>
                   </body>
-                  <!-- TCP marker, matches URDF's fixed end_effector_joint (end_effector_xyz/rpy
-                       in so101.common.xacro) - not the ros2_so_arm MJCF's site, which does not
-                       match that URDF's own rpy. -->
+                  <!-- Matches URDF's end_effector_joint rpy, not ros2_so_arm's MJCF site (which
+                       doesn't match it). -->
                   <site group="5" name="end_effector_link" pos="-0.0079 -0.000218121 -0.0981274" quat="0.707105 0 0.707108 0"/>
 
-                  <!-- moving_jaw_link pos/quat recomputed from so101.common.xacro's gripper_xyz/gripper_rpy
-                       directly (see file header) - so_arm_description's gripper_rpy has no pitch
-                       offset, unlike ros2_so_arm's so_arm101_macro.xacro (0.18 rad, undocumented). -->
+                  <!-- Recomputed from our own gripper_xyz/gripper_rpy (no pitch offset), unlike
+                       ros2_so_arm's so_arm101_macro.xacro (undocumented 0.18 rad offset). -->
                   <body name="moving_jaw_link" pos="0.0202 0.0188 -0.0234" quat="0.707105 0.707108 0 0">
                     <joint axis="0 0 1" name="gripper_joint" range="-0.174533 1.74533" class="sts3215"/>
                     <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012"
@@ -297,9 +281,8 @@
     </xacro:if>
   </xacro:if>
 
-  <!-- Compares $(arg standalone) directly, not via a bridged <xacro:property> - xacro
-       auto-coerces "true"/"false" property values to Python bool, breaking a naive
-       string comparison. -->
+  <!-- Compares $(arg standalone) directly, not via a bridged property - xacro auto-coerces
+       "true"/"false" properties to Python bool, breaking a naive string comparison. -->
   <xacro:if value="${'$(arg standalone)' == 'true'}">
     <statistic center="0.1 -0.01 0.05" extent="0.5"/>
 

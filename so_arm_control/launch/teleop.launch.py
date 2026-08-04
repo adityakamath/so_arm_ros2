@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Launch the full so_arm_control teleop + waypoint-patrol stack.
-
-Example usage:
-    ros2 launch so_arm_control teleop.launch.py
-"""
+"""SO-ARM teleop stack: joystick/GUI IK teleop, gripper teleop, waypoint patrol."""
 
 from launch import LaunchDescription
 from launch.substitutions import PathJoinSubstitution

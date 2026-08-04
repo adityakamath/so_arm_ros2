@@ -1,6 +1,5 @@
-# Separate from control.yaml/control.launch.py on purpose - gravity-comp mode needs a
-# different robot_description (operating_mode:=2, effort command interfaces) and bypasses
-# joint_trajectory_bridge/so_arm_controller entirely. See gravity_comp.launch.py.
+# Separate from control.yaml on purpose - needs a different (effort-mode) robot_description and
+# bypasses joint_trajectory_bridge/so_arm_controller entirely. See gravity_comp.launch.py.
 controller_manager:
   ros__parameters:
     update_rate: 50  # Hz

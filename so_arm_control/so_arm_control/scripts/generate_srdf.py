@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""
-Generate config/{model}.srdf's <disable_collisions> entries.
-
-Derived from SelfCollisionChecker's own adjacency/rest-pose analysis - keeps the SRDF consistent
-with the FCL-based runtime checker instead of an independent guess. Re-run whenever the URDF's
-collision geometry changes.
+"""Generate config/{model}.srdf's <disable_collisions> entries from SelfCollisionChecker's own
+adjacency/rest-pose analysis, keeping it consistent with the runtime checker. Re-run when the
+URDF's collision geometry changes.
 
 Usage: ros2 run so_arm_control generate_srdf -- <model> <urdf_path> <output_srdf_path>
 """

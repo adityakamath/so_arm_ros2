@@ -180,10 +180,8 @@ class JointTrajectoryBridge(Node):
         """
         Return colliding pairs at the first unsafe point along the path to joint_values.
 
-        Checks the straight-line path from the arm's actual current position to joint_values -
-        not just the endpoint, since the controller's own interpolation between two individually-
-        safe points can cut through a collision zone neither one occupies (confirmed happening on
-        real hardware before this was added).
+        Checks the straight-line path, not just the endpoint - interpolation between two
+        individually-safe points can still cut through a collision zone (seen on real hardware).
         """
         deltas = (
             abs(joint_values[name] - current[name]) for name in joint_values if name in current
@@ -206,15 +204,11 @@ class JointTrajectoryBridge(Node):
         self, joint_values: dict, requested: dict, needed: set, pairs: list, safe_values: dict
     ) -> None:
         """
-        Clamp each joint in `needed` to the boundary of the collision along its own path.
+        Clamp each joint in `needed` to its own collision boundary, one joint at a time.
 
-        Sweeps from safe_values to requested, one joint at a time, so a joint with plenty of
-        clearance isn't dragged back by whichever needs the biggest pullback. Scans (not binary-
-        searches) so a thin or non-monotonic collision pocket can't be stepped over. `requested`
-        must be the ORIGINAL commanded target, not `joint_values` - reusing an already-clamped
-        value here would zero out a joint's own scan range and freeze it even when moving it
-        would help. One-sided: a joint clamped here can still move away from the collision on a
-        later call.
+        Scans (not binary-searches) from safe_values to requested so a non-monotonic collision
+        pocket can't be stepped over. `requested` must stay the ORIGINAL target - reusing an
+        already-clamped `joint_values` here would collapse a joint's own scan range to zero.
         """
         trial = dict(joint_values)
         for name in sorted(needed):
@@ -234,9 +228,8 @@ class JointTrajectoryBridge(Node):
         """
         Fall back to a joint-group scan for collisions that need multiple joints to move together.
 
-        Scans every joint in `needed` along one shared fraction from safe_values to requested
-        (see _scan_to_boundary for why it must be the original request), stopping at the last
-        jointly-clear step.
+        Scans every joint in `needed` along one shared fraction from safe_values to requested,
+        stopping at the last jointly-clear step.
         """
         trial = dict(joint_values)
         last_safe = dict(safe_values)
@@ -253,11 +246,10 @@ class JointTrajectoryBridge(Node):
 
     def _resolve_collisions(self, joint_values: dict, current: dict) -> bool:
         """
-        Clamp joint_values in place until the whole motion from `current` is collision-free.
+        Clamp joint_values in place until the motion from `current` is collision-free.
 
-        `current` is a snapshot of the arm's actual position, fixed for this one call (see
-        _on_joint_state). Tries a per-joint clamp first, escalating to a group clamp only where
-        that alone can't clear it - see _scan_to_boundary(_group). Returns False if unresolvable.
+        Tries a per-joint clamp first, escalating to a group clamp only where that alone can't
+        clear it. Returns False if unresolvable.
         """
         requested = dict(joint_values)
         touched = set()

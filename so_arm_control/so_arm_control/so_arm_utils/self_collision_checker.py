@@ -255,9 +255,8 @@ class SelfCollisionChecker:
                 depth = max((c.penetration_depth for c in result.contacts), default=0.0)
                 threshold = self._intersection_margin
                 if frozenset((a, b)) in self._adjacent_pairs:
-                    # Adjacent links can have tiny nominal overlap from mesh/contact modeling;
-                    # keep strict overlap handling for non-adjacent pairs, but require deeper
-                    # penetration for parent-child pairs to avoid over-clamping at rest.
+                    # Parent-child links have tiny nominal mesh overlap at rest - require deeper
+                    # penetration for those pairs specifically to avoid over-clamping.
                     threshold = max(threshold, self._collision_margin)
                 if depth > threshold:
                     colliding.append((a, b))

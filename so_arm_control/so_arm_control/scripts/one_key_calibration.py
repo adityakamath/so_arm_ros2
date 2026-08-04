@@ -1,16 +1,9 @@
 #!/usr/bin/env python3
 
-"""Run guided full-arm calibration with sts_hardware_interface services.
+"""Guided full-arm calibration CLI: midpoint pose -> one-key calibration -> manual range sweep.
 
-This is an operator helper utility, not a long-running ROS 2 node.
-It follows a LeRobot-style interactive flow:
-1) move arm to midpoint pose,
-2) trigger one-key midpoint calibration,
-3) sweep joints through full range manually.
-
-Important: step (3) is currently a manual verification/training step. Unlike
-LeRobot's full calibration pipeline, this script does not yet record range data
-to a persistent calibration file.
+Operator helper utility, not a long-running ROS 2 node. Unlike LeRobot's full calibration
+pipeline, the range-sweep step is manual verification only - not yet recorded to a file.
 """
 
 import argparse

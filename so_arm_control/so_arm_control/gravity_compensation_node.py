@@ -36,10 +36,8 @@ class GravityCompensationNode(Node):
         # Fraction of max_torque_nm the effort command may reach - safety cap, independent of
         # gravity_scale below (this bounds the output even if gravity_scale is tuned too high).
         self.declare_parameter('max_effort', 0.5)
-        # Multiplies the computed gravity torque before converting to effort - 1.0 = full
-        # compensation (arm should feel weightless); lower values leave a self-centering droop.
-        # Start low and increase gradually - an untuned max_torque_nm-based conversion is only
-        # a first-order approximation of the real motor's low-speed PWM-to-torque behavior.
+        # Fraction of computed gravity torque to actually command - 1.0 = weightless. Uncalibrated
+        # conversion, start low and raise gradually.
         self.declare_parameter('gravity_scale', 0.5)
 
         robot_description_topic = self.get_parameter('robot_description_topic').value
