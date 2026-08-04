@@ -406,7 +406,7 @@
     <parent link="shoulder_link"/>
     <child link="upper_arm_link"/>
     <origin xyz="${shoulder_lift_xyz}" rpy="${shoulder_lift_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${shoulder_lift_lower}" upper="${shoulder_lift_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
@@ -414,7 +414,7 @@
     <parent link="upper_arm_link"/>
     <child link="lower_arm_link"/>
     <origin xyz="${elbow_flex_xyz}" rpy="${elbow_flex_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${elbow_flex_lower}" upper="${elbow_flex_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
@@ -422,7 +422,7 @@
     <parent link="lower_arm_link"/>
     <child link="wrist_link"/>
     <origin xyz="${wrist_flex_xyz}" rpy="${wrist_flex_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${wrist_flex_lower}" upper="${wrist_flex_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
@@ -430,7 +430,7 @@
     <parent link="wrist_link"/>
     <child link="gripper_link"/>
     <origin xyz="${wrist_roll_xyz}" rpy="${wrist_roll_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${wrist_roll_lower}" upper="${wrist_roll_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
@@ -469,7 +469,7 @@
     <parent link="gripper_link"/>
     <child link="moving_jaw_link"/>
     <origin xyz="${gripper_xyz}" rpy="${gripper_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${gripper_lower}" upper="${gripper_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
