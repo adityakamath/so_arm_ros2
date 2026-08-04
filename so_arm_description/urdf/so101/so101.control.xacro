@@ -36,7 +36,7 @@
   <xacro:property name="wrist_flex_upper" value="1.65806"/>
   <xacro:property name="wrist_roll_lower" value="-2.74385"/>
   <xacro:property name="wrist_roll_upper" value="2.84121"/>
-  <xacro:property name="gripper_lower" value="-0.174533"/>
-  <xacro:property name="gripper_upper" value="1.74533"/>
+  <xacro:property name="gripper_lower" value="-1.74533"/>
+  <xacro:property name="gripper_upper" value="0.174533"/>
 
 </robot>

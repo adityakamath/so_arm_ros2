@@ -432,7 +432,7 @@
     <child link="moving_jaw_link"/>
     <origin rpy="1.5708 -5.24284e-08 -1.41553e-15" xyz="0.0202 0.0188 -0.0234"/>
     <axis xyz="0 0 -1"/>
-    <limit effort="2.942" lower="-0.174533" upper="1.74533" velocity="1e6"/>
+    <limit effort="2.942" lower="-1.74533" upper="0.174533" velocity="1e6"/>
   </joint>
   <!-- ROS 2 CONTROL -->
   <ros2_control name="so101_control" type="system">
@@ -534,8 +534,8 @@
     <joint name="gripper_joint">
       <param name="motor_id">6</param>
       <param name="operating_mode">0</param>
-      <param name="min_position">-0.174533</param>
-      <param name="max_position">1.74533</param>
+      <param name="min_position">-1.74533</param>
+      <param name="max_position">0.174533</param>
       <param name="max_velocity">4.433204476989503</param>
       <param name="position_center_steps">2048</param>
       <command_interface name="position"/>
