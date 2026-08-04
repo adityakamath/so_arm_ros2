@@ -65,6 +65,10 @@ def _scan_serial_ports() -> List[str]:
         '/dev/ttySERVO',
         *sorted(glob('/dev/ttyUSB*')),
         *sorted(glob('/dev/ttyACM*')),
+        *sorted(glob('/dev/tty.usbmodem*')),
+        *sorted(glob('/dev/tty.usbserial-*')),
+        *sorted(glob('/dev/cu.usbmodem*')),
+        *sorted(glob('/dev/cu.usbserial-*')),
     ]
     unique: List[str] = []
     seen = set()
@@ -367,8 +371,6 @@ def main() -> int:
                 )
                 return 12
 
-        _check_serial_port(serial_port)
-
         if not expected_motor_ids and detected_motor_ids:
             expected_motor_ids = detected_motor_ids
 
@@ -379,6 +381,8 @@ def main() -> int:
         if args.dry_run:
             node.get_logger().info('Dry run complete. Detected serial_port=%s, motor_ids=%s, mode0_motor_ids=%s' % (serial_port, expected_motor_ids, detected_mode0_motor_ids))
             return 0
+
+        _check_serial_port(serial_port)
 
         if expected_motor_ids and motor_ids:
             unknown = [motor_id for motor_id in motor_ids if motor_id not in expected_motor_ids]
