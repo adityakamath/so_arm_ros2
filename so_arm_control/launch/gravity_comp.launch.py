@@ -31,7 +31,7 @@ def launch_setup(context):
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
     xacro = FindExecutable(name='xacro').perform(context)
 
-    xacro_cmd = f'{xacro} {pkg_desc}/urdf/{model}/{model}.urdf.xacro operating_mode:=2'
+    xacro_cmd = f'{xacro} {pkg_desc}/urdf/{model}/{model}.urdf.xacro arm_operating_mode:=2 gripper_operating_mode:=2'
     if serial_port:
         xacro_cmd += f' serial_port:={serial_port}'
     if use_mock:

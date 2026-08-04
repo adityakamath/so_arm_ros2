@@ -14,7 +14,8 @@
   <xacro:property name="wrist_flex_motor_id" value="4"/>
   <xacro:property name="wrist_roll_motor_id" value="5"/>
   <xacro:property name="gripper_motor_id" value="6"/>
-  <xacro:property name="operating_mode" value="0"/>  <!-- Position mode -->
+  <xacro:property name="arm_operating_mode" value="0"/>     <!-- Arm joints 1-5: 0=Position, 1=Velocity, 2=PWM/Effort -->
+  <xacro:property name="gripper_operating_mode" value="0"/> <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
 
   <!-- Motor-specific parameter (STS3215 default) -->
   <xacro:property name="sts_max_velocity_steps" value="3400"/>  <!-- Max hardware velocity in steps/s -->
