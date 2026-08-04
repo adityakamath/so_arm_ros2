@@ -341,16 +341,9 @@ def main() -> int:
         )
 
         if detected_motor_ids:
-            node.get_logger().info(
-                'Detected motor IDs from %s: %s',
-                args.controller_manager_node,
-                detected_motor_ids,
-            )
+            node.get_logger().info('Detected motor IDs from %s: %s' % (args.controller_manager_node, detected_motor_ids))
         else:
-            node.get_logger().warn(
-                'Could not detect motor IDs from %s robot_description.',
-                args.controller_manager_node,
-            )
+            node.get_logger().warn('Could not detect motor IDs from %s robot_description.' % (args.controller_manager_node,))
 
         if detected_mode0_motor_ids:
             node.get_logger().info('Detected mode-0 motor IDs: %s' % (detected_mode0_motor_ids,))
@@ -358,25 +351,15 @@ def main() -> int:
         serial_port = args.serial_port.strip() if args.serial_port else ''
         if not serial_port and detected_serial_port:
             serial_port = detected_serial_port
-            node.get_logger().info(
-                'Detected serial port from %s: %s',
-                args.controller_manager_node,
-                serial_port,
-            )
+            node.get_logger().info('Detected serial port from %s: %s' % (args.controller_manager_node, serial_port))
 
         if not serial_port:
             candidates = _scan_serial_ports()
             if len(candidates) == 1:
                 serial_port = candidates[0]
-                node.get_logger().warn(
-                    'Could not detect serial port from robot_description, using single /dev candidate: %s',
-                    serial_port,
-                )
+                node.get_logger().warn('Could not detect serial port from robot_description, using single /dev candidate: %s' % (serial_port,))
             elif len(candidates) > 1:
-                node.get_logger().error(
-                    'Serial port auto-detection ambiguous. Candidates: %s. Use --serial-port.',
-                    candidates,
-                )
+                node.get_logger().error('Serial port auto-detection ambiguous. Candidates: %s. Use --serial-port.' % (candidates,))
                 return 11
             else:
                 node.get_logger().error(
@@ -394,31 +377,17 @@ def main() -> int:
             node.get_logger().info('Using expected motor IDs: %s' % (expected_motor_ids,))
 
         if args.dry_run:
-            node.get_logger().info(
-                'Dry run complete. Detected serial_port=%s, motor_ids=%s, mode0_motor_ids=%s',
-                serial_port,
-                expected_motor_ids,
-                detected_mode0_motor_ids,
-            )
+            node.get_logger().info('Dry run complete. Detected serial_port=%s, motor_ids=%s, mode0_motor_ids=%s' % (serial_port, expected_motor_ids, detected_mode0_motor_ids))
             return 0
 
         if expected_motor_ids and motor_ids:
             unknown = [motor_id for motor_id in motor_ids if motor_id not in expected_motor_ids]
             if unknown:
-                node.get_logger().error(
-                    'Requested motor IDs not in expected set. requested=%s expected=%s unknown=%s',
-                    motor_ids,
-                    expected_motor_ids,
-                    unknown,
-                )
+                node.get_logger().error('Requested motor IDs not in expected set. requested=%s expected=%s unknown=%s' % (motor_ids, expected_motor_ids, unknown))
                 return 10
 
         if not node.wait_for_service(args.wait_timeout):
-            node.get_logger().error(
-                "Service '%s' not available within %.1f seconds.",
-                args.service,
-                args.wait_timeout,
-            )
+            node.get_logger().error("Service '%s' not available within %.1f seconds." % (args.service, args.wait_timeout))
             return 3
 
         if not args.skip_emergency_stop:
@@ -434,10 +403,7 @@ def main() -> int:
                 'Step 1/3: Move the arm so each target joint is near the middle of its physical range'
             )
 
-        node.get_logger().info(
-            'Step 2/3: Sending one-key midpoint calibration request for %s',
-            'all mode-0 joints' if not motor_ids else f'motor_ids={motor_ids}',
-        )
+        node.get_logger().info('Step 2/3: Sending one-key midpoint calibration request for %s' % ('all mode-0 joints' if not motor_ids else f'motor_ids={motor_ids}',))
 
         response = node.call(motor_ids, args.response_timeout)
         if response.accepted:
@@ -448,9 +414,7 @@ def main() -> int:
 
         if not args.skip_sweep_step:
             if args.yes:
-                node.get_logger().info(
-                    'Step 3/3: Manually sweep each calibrated joint through full range (non-interactive mode).'
-                )
+                node.get_logger().info('Step 3/3: Manually sweep each calibrated joint through full range (non-interactive mode).')
             else:
                 _wait_for_enter(
                     'Step 3/3: Manually sweep each calibrated joint through full range of motion, one joint at a time'
@@ -476,7 +440,7 @@ def main() -> int:
             accepted=response.accepted,
             message=response.message,
         )
-        node.get_logger().info('Wrote calibration record: %s' % (str(record_path,)))
+        node.get_logger().info('Wrote calibration record: %s' % (str(record_path),))
 
         node.get_logger().info('Guided calibration workflow finished.')
         return 0
@@ -485,7 +449,7 @@ def main() -> int:
         node.get_logger().error(str(exc))
         return 5
     except Exception as exc:  # pragma: no cover - defensive CLI guard
-        node.get_logger().error('Calibration call failed: %s' % (str(exc,)))
+        node.get_logger().error('Calibration call failed: %s' % (str(exc),))
         return 6
     finally:
         node.destroy_node()
