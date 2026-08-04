@@ -469,7 +469,7 @@
     <parent link="gripper_link"/>
     <child link="moving_jaw_link"/>
     <origin xyz="${gripper_xyz}" rpy="${gripper_rpy}"/>
-    <axis xyz="0 0 -1"/>
+    <axis xyz="0 0 1"/>
     <limit lower="${gripper_lower}" upper="${gripper_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
