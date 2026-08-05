@@ -18,12 +18,19 @@
   <xacro:property name="gripper_operating_mode" value="0"/> <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
 
   <!-- Motor-specific parameter (STS3215 default) -->
-  <xacro:property name="sts_max_velocity_steps" value="3400"/>  <!-- Max hardware velocity in steps/s -->
+  <xacro:property name="sts_max_velocity_steps" value="65535"/>  <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
 
   <!-- Maximum allowable torque/velocity for each motor -->
-  <xacro:property name="max_velocity_steps" value="${int(sts_max_velocity_steps * 0.85)}"/>  <!-- 85% of hardware max, 15% safety margin -->
+  <xacro:property name="max_velocity_steps" value="${sts_max_velocity_steps}"/>  <!-- full hardware max -->
   <xacro:property name="max_velocity_rads" value="${max_velocity_steps*2*pi/4096}"/>  <!-- rad/s -->
   <xacro:property name="max_torque_nm" value="2.942"/>  <!-- N⋅m (30 kgf⋅cm for STS3215) -->
+
+  <!-- Position-mode (Mode 0) internal servo PID, written to EEPROM on activate -->
+  <xacro:property name="p_coefficient" value="14"/>
+  <xacro:property name="d_coefficient" value="24"/>
+  <xacro:property name="i_coefficient" value="0"/>
+  <!-- Position insensitive-area (CW_DEAD/CCW_DEAD, both set to this value) -->
+  <xacro:property name="deadband" value="2"/>
 
   <!-- Joint limits (from onshape-to-robot calibration) -->
   <xacro:property name="shoulder_pan_lower" value="-1.91986"/>

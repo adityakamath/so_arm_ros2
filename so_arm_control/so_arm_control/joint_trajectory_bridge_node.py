@@ -67,6 +67,9 @@ class JointTrajectoryBridge(Node):
         self._max_velocity: dict[str, float] = {}  # rad/s/joint, filled in from /robot_description
         self._limits: dict[str, tuple] = {}  # (lower, upper) rad/joint, from /robot_description
         self._current_position: dict[str, float] = {}  # last known ACTUAL position, /joint_states
+        # Last commanded target/time - used to derive point.velocities in _on_joint_state.
+        self._previous_target: dict[str, float] = {}
+        self._previous_time = None
 
         # Real-time topics: drop a stale backlog rather than work through it if a callback lags.
         realtime_qos = QoSProfile(
@@ -338,10 +341,28 @@ class JointTrajectoryBridge(Node):
             if max_velocity and cur is not None:
                 time_from_start = max(time_from_start, abs(target - cur) / max_velocity)
 
+        # Per-joint cruise velocity: target delta / dt, clamped to max_velocity. Requires
+        # so_arm_controller's allow_nonzero_velocity_at_trajectory_end: true (control.yaml).
+        now = self.get_clock().now()
+        dt = None
+        if self._previous_time is not None:
+            dt = (now - self._previous_time).nanoseconds * 1e-9
+        velocities = []
+        for name, target in zip(self._joint_names, positions):
+            prev_target = self._previous_target.get(name)
+            velocity = 0.0
+            if dt is not None and dt > 1e-3 and prev_target is not None:
+                velocity = (target - prev_target) / dt
+                max_velocity = self._max_velocity.get(name)
+                if max_velocity:
+                    velocity = max(-max_velocity, min(max_velocity, velocity))
+            velocities.append(velocity)
+        self._previous_target = dict(zip(self._joint_names, positions))
+        self._previous_time = now
+
         point = JointTrajectoryPoint()
         point.positions = positions
-        # so_arm_controller rejects any trajectory whose last point has nonzero velocity, and
-        # every point here is the last - velocities must stay unset/zero.
+        point.velocities = velocities
         whole_seconds = int(time_from_start)
         nanosec = int((time_from_start - whole_seconds) * 1e9)
         point.time_from_start = Duration(sec=whole_seconds, nanosec=nanosec)

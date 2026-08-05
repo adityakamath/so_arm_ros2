@@ -151,7 +151,7 @@ class GripperTeleopNode(Node):
         if use_gui:
             target = min(max(self._gui_position, lower), upper)
         elif self._raw is not None:
-            target = _remap(self._raw, lower, (lower + upper) / 2)
+            target = _remap(self._raw, upper, (lower + upper) / 2)
         else:
             return
 

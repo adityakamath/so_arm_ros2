@@ -67,7 +67,7 @@ class _PinocchioIK:
     """Task-priority damped Gauss-Newton IK (position primary, roll in its nullspace)."""
 
     # Safety cap per tick; warm-started solves converge in far fewer iterations normally.
-    _MAX_ITERS = 50
+    _MAX_ITERS = 100
     # meters - convergence threshold, finer than the arm's actual positioning repeatability.
     _POSITION_EPS = 2e-3
     # Always-applied numerical floor, guards against an exactly-singular J@J.T.
@@ -78,7 +78,9 @@ class _PinocchioIK:
     # Damping ramps up to this right at a singularity; a fixed value here slowed normal tracking.
     _DAMPING_MAX = 1e-2
     # Fraction of the raw correction applied per iteration; damps within-tick oscillation.
-    _STEP = 0.5
+    # Near-singularity oscillation is already handled by _adaptive_damping shrinking the raw
+    # correction itself, so this only needs to be a mild brake, not a second halving each pass.
+    _STEP = 0.75
 
     def _adaptive_damping(self, J: np.ndarray) -> float:
         """Singularity-robust damping (squared), for J @ J.T + damping * I."""

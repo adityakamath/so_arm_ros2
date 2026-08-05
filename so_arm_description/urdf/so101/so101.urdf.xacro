@@ -469,7 +469,7 @@
     <parent link="gripper_link"/>
     <child link="moving_jaw_link"/>
     <origin xyz="${gripper_xyz}" rpy="${gripper_rpy}"/>
-    <axis xyz="0 0 1"/>
+    <axis xyz="0 0 -1"/>
     <limit lower="${gripper_lower}" upper="${gripper_upper}" effort="${max_torque_nm}" velocity="1e6"/>
   </joint>
 
@@ -500,6 +500,10 @@
       <param name="max_position">${shoulder_pan_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
@@ -527,6 +531,10 @@
       <param name="max_position">${shoulder_lift_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
@@ -554,6 +562,10 @@
       <param name="max_position">${elbow_flex_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
@@ -581,6 +593,10 @@
       <param name="max_position">${wrist_flex_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
@@ -608,6 +624,10 @@
       <param name="max_position">${wrist_roll_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on arm_operating_mode -->
       <xacro:if value="${'$(arg arm_operating_mode)' == '2'}">
         <command_interface name="effort"/>
@@ -635,6 +655,10 @@
       <param name="max_position">${gripper_upper}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">${p_coefficient}</param>
+      <param name="d_coefficient">${d_coefficient}</param>
+      <param name="i_coefficient">${i_coefficient}</param>
+      <param name="deadband">${deadband}</param>
       <!-- cmd interfaces depend on gripper_operating_mode -->
       <xacro:if value="${'$(arg gripper_operating_mode)' == '2'}">
         <command_interface name="effort"/>
