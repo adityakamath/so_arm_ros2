@@ -9,11 +9,11 @@
 
 **This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. Gravity-compensation mode (`gravity_comp.launch.py`) bypasses `joint_trajectory_bridge` entirely — no self-collision checking applies while it's active, only human supervision during hands-on backdriving.
 
-This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. **Gravity compensation and one-key motor calibration are both untested on physical hardware** — see their sections below before using either. No warranty, express or implied — see [LICENSE](LICENSE).
+This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. **Gravity compensation is untested on physical hardware** — see its section below before using it. No warranty, express or implied — see [LICENSE](LICENSE).
 
 ## Overview
 
-ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, waypoint recording and patrolling (teach-and-repeat), self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or patrol). Also includes (experimental, untested) gravity compensation for manual backdriving and guided one-key motor calibration. Supports real hardware (Feetech STS servos) and MuJoCo simulation.
+ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, waypoint recording and patrolling (teach-and-repeat), self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or patrol). Also includes (experimental, untested) gravity compensation for manual backdriving. Supports real hardware (Feetech STS servos) and MuJoCo simulation.
 
 Control interface note: waypoint recording/following is exposed through services (`/record_waypoint`, `/waypoint_follow`, `/reset_waypoints`) in `waypoint_follow_node`; this repository does not currently expose a custom MoveToPose action.
 
@@ -134,17 +134,6 @@ than pushing indefinitely. This is the recommended way to get compliant gripper 
 need for the gripper to run in PWM/effort mode at all. Sign and magnitude are uncalibrated —
 start at `0.0` and raise gradually, same posture as `gravity_scale`/`max_effort`.
 
-## Calibration (Experimental, Untested)
-
-`one_key_calibration` is a guided CLI wrapper around `sts_hardware_interface`'s `/one_key_calibration` service (position-mode joints only) — re-centers each motor's EEPROM midpoint to wherever it's currently physically positioned. Auto-detects the serial port and motor IDs from `/controller_manager`'s `robot_description`, engages `/emergency_stop` for safe manual repositioning during the process, and writes a record to `~/.config/so_arm_control/calibration/`.
-
-```bash
-ros2 run so_arm_control one_key_calibration --dry-run   # detection only, no hardware writes
-ros2 run so_arm_control one_key_calibration
-```
-
-`sts_hardware_interface` documents this calibration path itself as untested on physical hardware — treat with the same caution as gravity compensation above.
-
 ## Structure
 
 ```text
@@ -153,7 +142,7 @@ so_arm_ros2/
 │   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml, gravity_comp.yaml
 │   ├── launch/                # control.launch.py, teleop.launch.py, gravity_comp.launch.py
 │   └── so_arm_control/
-│       ├── scripts/            # one_key_calibration + generate_srdf utilities
+│       ├── scripts/            # generate_srdf utility
 │       ├── gravity_compensation_node.py  # untested, see Gravity Compensation above
 │       └── so_arm_utils/       # Shared IK/kinematic-limiting + self-collision-checking helpers
 ├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)

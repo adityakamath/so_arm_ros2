@@ -32,7 +32,6 @@ setup(
             'waypoint_follow_node = so_arm_control.waypoint_follow_node:main',
             'gravity_compensation_node = so_arm_control.gravity_compensation_node:main',
             'generate_srdf = so_arm_control.scripts.generate_srdf:main',
-            'one_key_calibration = so_arm_control.scripts.one_key_calibration:main',
         ],
     },
 )
