@@ -7,7 +7,7 @@
 
 ## ⚠️ Safety
 
-**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision.
+**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. While e-stopped, `ik_teleop_node` tracks the arm's live pose as its target instead of driving toward the pre-e-stop target, so releasing e-stop holds the arm where it was left by hand instead of snapping back.
 
 This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. No warranty, express or implied — see [LICENSE](LICENSE).
 

@@ -9,16 +9,34 @@ from so_arm_control.so_arm_utils.kinematics import _PinocchioIK, KinematicLimite
 
 from geometry_msgs.msg import TransformStamped, TwistStamped
 import rclpy
+from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import (
-    QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy,
+    DurabilityPolicy,
+    LivelinessPolicy,
+    QoSDurabilityPolicy,
+    QoSHistoryPolicy,
+    QoSProfile,
+    QoSReliabilityPolicy,
+    ReliabilityPolicy,
 )
 from sensor_msgs.msg import JointState
+from service_msgs.msg import ServiceEventInfo
 from std_msgs.msg import String
+from std_srvs.srv import SetBool_Event
 import tf2_ros
 from visualization_msgs.msg import Marker
+
+# Transient local + reliable so a late-joining subscriber replays the last service call.
+STATE_SERVICE_QOS = QoSProfile(
+    depth=2,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    liveliness=LivelinessPolicy.AUTOMATIC,
+    liveliness_lease_duration=Duration(seconds=1),
+)
 
 
 class IkTeleopNode(Node):
@@ -51,6 +69,8 @@ class IkTeleopNode(Node):
         self.declare_parameter('max_acceleration', 40.0)
         # meters - caps the joystick target's distance from base; 0.0 disables the clamp.
         self.declare_parameter('max_target_reach', 0.0)
+        # SetBool service whose state gates target tracking during e-stop.
+        self.declare_parameter('estop_service', '/emergency_stop')
 
         twist_topic = self.get_parameter('twist_topic').value
         self._default_parent_frame = self.get_parameter('default_parent_frame').value
@@ -92,6 +112,8 @@ class IkTeleopNode(Node):
         self._target_max_reach: float | None = None
         self._seeded_from_fk = False
         self._frame_warned = False
+        self._estop_active = False
+        self._estop_pending: dict = {}
         max_acceleration = float(self.get_parameter('max_acceleration').value)
         self._limiter = KinematicLimiter(self._joint_names, publish_rate, max_acceleration)
 
@@ -115,6 +137,11 @@ class IkTeleopNode(Node):
         )
         self.create_subscription(
             JointState, joint_states_topic, self._on_joint_states, realtime_qos,
+        )
+        estop_service = self.get_parameter('estop_service').value
+        self.create_subscription(
+            SetBool_Event, f'{estop_service}/_service_event', self._on_estop_event,
+            STATE_SERVICE_QOS,
         )
         self._seed_timeout_timer = self.create_timer(5.0, self._on_seed_timeout)
 
@@ -183,6 +210,24 @@ class IkTeleopNode(Node):
         self.get_logger().info(
             f"Seeded target start from '{self._end_effector_link}': {self._position}"
         )
+
+    def _on_estop_event(self, msg: SetBool_Event) -> None:
+        # Correlate request/response by (client_gid, sequence_number) to read the call's value.
+        key = (bytes(msg.info.client_gid), msg.info.sequence_number)
+
+        if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
+            if msg.request:
+                self._estop_pending[key] = msg.request[0].data
+            if len(self._estop_pending) > 16:  # defensive cap, shouldn't normally fill
+                self._estop_pending.pop(next(iter(self._estop_pending)), None)
+            return
+
+        if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
+            if key not in self._estop_pending or not msg.response:
+                return
+            value = self._estop_pending.pop(key)
+            if msg.response[0].success:
+                self._estop_active = value
 
     def _on_seed_timeout(self) -> None:
         if not self._seeded_from_fk:
@@ -261,6 +306,19 @@ class IkTeleopNode(Node):
             )
 
         current = self._limiter.current_state()
+
+        if self._estop_active:
+            # Torque is off - track the arm instead of driving it, so releasing e-stop holds
+            # in place instead of snapping back to a stale pre-e-stop target.
+            if current is not None:
+                position = self._ik.fk_position(current)
+                if position is not None:
+                    self._position = list(position)
+                if self._joint_names[-1] in current:
+                    self._target_roll = current[self._joint_names[-1]]
+                self._limiter.prev_solution = dict(current)
+            return
+
         warm_start = self._limiter.solve_warm_start(current)
         solution = self._ik.solve(tuple(self._position), warm_start, self._target_roll)
         if solution is None:

@@ -9,15 +9,15 @@ joy_teleop:
       axis_mappings:
         twist-linear-x:
           axis: 1  # Left stick vertical
-          scale: 0.2
+          scale: 0.25
           offset: 0.0
         twist-linear-y:
           axis: 0  # Left stick horizontal
-          scale: 0.2
+          scale: 0.25
           offset: 0.0
         twist-linear-z:
           axis: 3  # Right stick vertical
-          scale: 0.2
+          scale: 0.15
           offset: 0.0
         twist-angular-x:
           axis: 2  # Right stick horizontal - drives wrist roll
@@ -126,5 +126,5 @@ ik_teleop_node:
     default_orientation: [0.0, 0.0, 0.0]
     publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
     max_acceleration: 400.0  # rad/s^2 - caps velocity change tick to tick, see _kinematic_limit
-    # meters - caps ik_target distance from base; 0 disables. so101 only, so100 is smaller.
-    max_target_reach: 0.75
+    # meters - caps ik_target distance from base; 0 disables. 
+    max_target_reach: 0.45

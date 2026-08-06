@@ -30,7 +30,7 @@
   <xacro:property name="d_coefficient" value="24"/>
   <xacro:property name="i_coefficient" value="0"/>
   <!-- Position insensitive-area (CW_DEAD/CCW_DEAD, both set to this value) -->
-  <xacro:property name="deadband" value="2"/>
+  <xacro:property name="deadband" value="10"/>
 
   <!-- Joint limits -->
   <xacro:property name="shoulder_pan_lower" value="-2"/>
