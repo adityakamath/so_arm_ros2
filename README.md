@@ -7,13 +7,13 @@
 
 ## ⚠️ Safety
 
-**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. Gravity-compensation mode (`gravity_comp.launch.py`) bypasses `joint_trajectory_bridge` entirely — no self-collision checking applies while it's active, only human supervision during hands-on backdriving.
+**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision.
 
-This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. **Gravity compensation is untested on physical hardware** — see its section below before using it. No warranty, express or implied — see [LICENSE](LICENSE).
+This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. No warranty, express or implied — see [LICENSE](LICENSE).
 
 ## Overview
 
-ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, waypoint recording and patrolling (teach-and-repeat), self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or patrol). Also includes (experimental, untested) gravity compensation for manual backdriving. Supports real hardware (Feetech STS servos) and MuJoCo simulation.
+ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, waypoint recording and patrolling (teach-and-repeat), self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or patrol). Supports real hardware (Feetech STS servos) and MuJoCo simulation.
 
 Control interface note: waypoint recording/following is exposed through services (`/record_waypoint`, `/waypoint_follow`, `/reset_waypoints`) in `waypoint_follow_node`; this repository does not currently expose a custom MoveToPose action.
 
@@ -25,7 +25,7 @@ Control interface note: waypoint recording/following is exposed through services
 ### Dependencies
 
 - **[ROS 2](https://docs.ros.org/en/kilted/)**: Tested with Kilted, but should work on other ROS 2 distributions
-- **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, `parallel_gripper_controller`, and `effort_controllers` (gravity compensation only)
+- **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, and `parallel_gripper_controller`
 - **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `modules/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK solver shared by teleop and waypoint patrol
 - **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
@@ -84,8 +84,6 @@ The most commonly used arguments for `so_arm_control control.launch.py` (run wit
 
 `teleop.launch.py` takes no launch arguments — it loads `so_arm_control/config/teleop.yaml` directly.
 
-`gravity_comp.launch.py` takes `model`, `serial_port`, `use_mock`, and `use_sim_time` (same meaning as above) — no `ros2_control_hardware_type`/mujoco args, real or mock hardware only.
-
 ## Joystick Configuration
 
 Teleoperation is configured for a **Steam Deck** used as a generic joystick, not through Steam Input, so button/axis numbers below are specific to that interface.
@@ -111,18 +109,6 @@ Teleoperation is configured for a **Steam Deck** used as a generic joystick, not
 
 Patrol always takes priority over manual control while active — see `joint_state_switch_node`'s priority-ordered input switching.
 
-## Gravity Compensation (Experimental, Untested)
-
-`gravity_comp.launch.py` puts every joint (arm + gripper) into the STS servos' PWM/effort mode and streams per-joint gravity-compensating torque — computed via Pinocchio's RNEA (`so_arm_utils/kinematics.py`'s `_PinocchioIK.gravity()`) — so the arm can be back-driven by hand for teaching poses.
-
-```bash
-ros2 launch so_arm_control gravity_comp.launch.py
-```
-
-**Separate and mutually exclusive with `control.launch.py`**: `operating_mode` (position+velocity vs. effort command interfaces) is baked into `robot_description` at hardware-interface startup, not runtime-switchable — stop one launch before starting the other. It also bypasses `joint_trajectory_bridge` entirely (see Safety above).
-
-`max_effort` and `gravity_scale` (`so_arm_control/config/gravity_comp.yaml`) both default to a conservative `0.5`. The torque→effort conversion (`torque_nm / max_torque_nm`, the STS3215's rated stall torque) is a first-order approximation that hasn't been validated against a real servo's low-speed PWM-to-torque behavior — raise both gradually while testing, never at once.
-
 ## Gripper Compliance (Experimental, Untested)
 
 `gripper_teleop_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default
@@ -130,20 +116,18 @@ ros2 launch so_arm_control gravity_comp.launch.py
 to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it —
 a software approximation of impedance control that stays entirely in Mode 0 (Position): the
 onboard servo PID remains the fast inner loop, so a stalled host still just holds position rather
-than pushing indefinitely. This is the recommended way to get compliant gripper behavior — no
-need for the gripper to run in PWM/effort mode at all. Sign and magnitude are uncalibrated —
-start at `0.0` and raise gradually, same posture as `gravity_scale`/`max_effort`.
+than pushing indefinitely. Sign and magnitude are uncalibrated — start at `0.0` and raise
+gradually.
 
 ## Structure
 
 ```text
 so_arm_ros2/
 ├── so_arm_control/          # ros2_control config, teleop/waypoint-patrol/gripper nodes, launch files
-│   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml, gravity_comp.yaml
-│   ├── launch/                # control.launch.py, teleop.launch.py, gravity_comp.launch.py
+│   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml
+│   ├── launch/                # control.launch.py, teleop.launch.py
 │   └── so_arm_control/
 │       ├── scripts/            # generate_srdf utility
-│       ├── gravity_compensation_node.py  # untested, see Gravity Compensation above
 │       └── so_arm_utils/       # Shared IK/kinematic-limiting + self-collision-checking helpers
 ├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
 └── modules/

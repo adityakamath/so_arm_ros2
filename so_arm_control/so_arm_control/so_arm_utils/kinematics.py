@@ -143,12 +143,6 @@ class _PinocchioIK:
         pin.framesForwardKinematics(self._model, self._data, q)
         return np.array(self._data.oMf[self._tip_frame_id].translation)
 
-    def gravity(self, joint_values: dict) -> dict[str, float]:
-        """Return {joint_name: gravity torque (N*m)} at joint_values (missing -> neutral)."""
-        q = self._q_from_joint_values(joint_values)
-        tau = pin.computeGeneralizedGravity(self._model, self._data, q)
-        return {name: float(tau[iv]) for name, iv in zip(self._joint_names, self._idx_vs)}
-
     def solve(self, target_xyz: tuple, current: dict | None, target_roll: float) -> dict | None:
         """Return {joint_name: angle} for target_xyz+target_roll, warm-started from `current`."""
         q = self._q_from_joint_values(current)
