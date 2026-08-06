@@ -44,5 +44,9 @@ gravity_compensation_node:
     end_effector_link: end_effector_link  # same name on both so100 and so101
     publish_rate: 30.0
     max_torque_nm: 2.942  # STS3215 rated stall torque - matches so_arm_description's own value
-    max_effort: 0.5  # safety cap on the effort command - raise gradually on real hardware
-    gravity_scale: 0.5  # fraction of computed gravity torque actually commanded - raise gradually
+    max_effort: 1.0  # safety cap on the effort command - raise gradually on real hardware
+    gravity_scale: 1.0  # fraction of computed gravity torque actually commanded - raise gradually
+    velocity_threshold: 0.05  # rad/s - below this counts as at rest (settle trigger)
+    effort_deviation_threshold: 0.05  # sensed load beyond feedforward past this counts as a push
+    hold_gain: 2.0  # normalized effort per rad of error once settled - raise gradually
+    settle_time: 0.3  # seconds of continuous rest before a joint latches into hold

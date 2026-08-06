@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Publish per-joint gravity-compensating effort so the arm can be back-driven by hand."""
+"""Publish per-joint gravity-compensating effort with a freedrive/hold state machine.
+
+Always applies gravity feedforward. Adds a soft position-hold term once a joint settles
+(low sensed velocity and load deviation); a push above either threshold drops the hold
+immediately so the joint stays freely movable by hand.
+"""
 
 # Must be the first non-stdlib import: runs so_arm_utils.kinematics' numpy-ABI sys.path fix
 # before rclpy/sensor_msgs transitively import the wrong numpy.
@@ -39,6 +44,17 @@ class GravityCompensationNode(Node):
         # Fraction of computed gravity torque to actually command - 1.0 = weightless. Uncalibrated
         # conversion, start low and raise gradually.
         self.declare_parameter('gravity_scale', 0.5)
+        # rad/s - below this, a joint counts as at rest (half of the settle trigger).
+        self.declare_parameter('velocity_threshold', 0.05)
+        # Normalized effort units - sensed load beyond feedforward past this counts as a push
+        # (the other half of the settle trigger).
+        self.declare_parameter('effort_deviation_threshold', 0.05)
+        # Normalized effort per rad of position error, once settled. Low by design so a hand
+        # can still overpower it - raise gradually.
+        self.declare_parameter('hold_gain', 2.0)
+        # seconds - both thresholds must hold continuously this long before latching into hold,
+        # to avoid chattering right at the boundary.
+        self.declare_parameter('settle_time', 0.3)
 
         robot_description_topic = self.get_parameter('robot_description_topic').value
         joint_states_topic = self.get_parameter('joint_states_topic').value
@@ -58,9 +74,20 @@ class GravityCompensationNode(Node):
         self._max_torque_nm = float(self.get_parameter('max_torque_nm').value)
         self._max_effort = float(self.get_parameter('max_effort').value)
         self._gravity_scale = float(self.get_parameter('gravity_scale').value)
+        self._velocity_threshold = float(self.get_parameter('velocity_threshold').value)
+        self._effort_deviation_threshold = float(
+            self.get_parameter('effort_deviation_threshold').value
+        )
+        self._hold_gain = float(self.get_parameter('hold_gain').value)
+        self._settle_time = float(self.get_parameter('settle_time').value)
 
         self._ik: _PinocchioIK | None = None
         self._latest_joint_state: dict | None = None
+        self._latest_velocity: dict[str, float] = {}
+        self._latest_effort: dict[str, float] = {}
+        self._hold_position: dict[str, float] = {}
+        self._holding = {name: False for name in self._joint_names}
+        self._quiet_since: dict[str, float | None] = {name: None for name in self._joint_names}
 
         realtime_qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -111,6 +138,10 @@ class GravityCompensationNode(Node):
 
     def _on_joint_states(self, msg: JointState) -> None:
         self._latest_joint_state = dict(zip(msg.name, msg.position))
+        if msg.velocity:
+            self._latest_velocity = dict(zip(msg.name, msg.velocity))
+        if msg.effort:
+            self._latest_effort = dict(zip(msg.name, msg.effort))
 
     def _on_timer(self) -> None:
         if self._ik is None or self._latest_joint_state is None:
@@ -123,13 +154,34 @@ class GravityCompensationNode(Node):
             return
 
         torque = self._ik.gravity(self._latest_joint_state)
+        now = self.get_clock().now().nanoseconds / 1e9
         msg = Float64MultiArray()
-        msg.data = [self._effort(torque[name]) for name in self._joint_names]
+        msg.data = [self._joint_effort(name, torque[name], now) for name in self._joint_names]
         self._effort_pub.publish(msg)
 
-    def _effort(self, torque_nm: float) -> float:
-        """Convert a gravity torque (N*m) into a clamped, scaled normalized effort command."""
-        effort = self._gravity_scale * torque_nm / self._max_torque_nm
+    def _joint_effort(self, name: str, torque_nm: float, now: float) -> float:
+        """Gravity feedforward, plus a soft position hold once the joint has settled."""
+        feedforward = self._gravity_scale * torque_nm / self._max_torque_nm
+        position = self._latest_joint_state[name]
+        velocity = self._latest_velocity.get(name, 0.0)
+        sensed_effort = self._latest_effort.get(name, feedforward)
+
+        quiet = (
+            abs(velocity) < self._velocity_threshold
+            and abs(sensed_effort - feedforward) < self._effort_deviation_threshold
+        )
+        if not quiet:
+            self._quiet_since[name] = None
+            self._holding[name] = False
+        elif self._quiet_since[name] is None:
+            self._quiet_since[name] = now
+        elif not self._holding[name] and now - self._quiet_since[name] >= self._settle_time:
+            self._holding[name] = True
+            self._hold_position[name] = position
+
+        effort = feedforward
+        if self._holding[name]:
+            effort += self._hold_gain * (self._hold_position[name] - position)
         return max(-self._max_effort, min(self._max_effort, effort))
 
 
