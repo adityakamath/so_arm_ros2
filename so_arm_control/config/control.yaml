@@ -1,4 +1,3 @@
-# Shared between so100 and so101 - identical joint set and joint names.
 controller_manager:
   ros__parameters:
     update_rate: 50  # Hz

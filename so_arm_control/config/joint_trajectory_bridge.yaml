@@ -1,4 +1,3 @@
-# SO-ARM (SO100/SO101) config for joint_trajectory_bridge_node.py - one file, joint names match.
 joint_trajectory_bridge:
   ros__parameters:
     input_topic: /joint_commands
