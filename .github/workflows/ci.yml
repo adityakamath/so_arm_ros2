@@ -57,7 +57,14 @@ jobs:
             ros-kilted-tf2-ros \
             ros-kilted-xacro
           pip install --break-system-packages --ignore-installed \
-            -r src/so_arm_ros2/requirements-dev.txt \
+            -r src/so_arm_ros2/requirements-dev.txt
+          # --user, not a plain system install: kinematics.py strips any sys.path entry
+          # containing '/.local/lib/' before importing pinocchio (needs the numpy 1.x ABI
+          # from ros-kilted-pinocchio's apt install above, not a newer pip-installed one).
+          # python-fcl/numpy-stl pull in their own numpy as a transitive dependency; without
+          # --user that lands in /usr/local/lib (not matched by the filter) and shadows the
+          # correct one, crashing pinocchio's import with a numpy ABI mismatch.
+          pip install --break-system-packages --user --ignore-installed \
             -r src/so_arm_ros2/so_arm_control/requirements.txt
 
       - name: colcon build
