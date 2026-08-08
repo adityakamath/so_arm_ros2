@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: ruff check
+        run: ruff check .
+
+  test:
+    name: pytest (ros:kilted)
+    # rclpy and the ROS message packages the test suite needs aren't on PyPI, so this
+    # runs inside a ROS image instead of alongside the pip-only lint job above.
+    runs-on: ubuntu-latest
+    container: ros:kilted
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          path: src/so_arm_ros2
+
+      - name: Install ROS dependencies
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends \
+            python3-pip python3-yaml python3-numpy git libfcl-dev \
+            ros-kilted-ament-index-python \
+            ros-kilted-control-msgs \
+            ros-kilted-controller-manager \
+            ros-kilted-controller-manager-msgs \
+            ros-kilted-effort-controllers \
+            ros-kilted-joint-state-broadcaster \
+            ros-kilted-joint-trajectory-controller \
+            ros-kilted-joy \
+            ros-kilted-joy-teleop \
+            ros-kilted-launch-testing \
+            ros-kilted-launch-testing-ros \
+            ros-kilted-parallel-gripper-controller \
+            ros-kilted-pinocchio \
+            ros-kilted-robot-state-publisher \
+            ros-kilted-ros2-control \
+            ros-kilted-ros2-controllers \
+            ros-kilted-tf2-ros \
+            ros-kilted-xacro
+          pip install --break-system-packages --ignore-installed \
+            -r src/so_arm_ros2/requirements-dev.txt \
+            -r src/so_arm_ros2/so_arm_control/requirements.txt
+
+      - name: colcon build
+        # --packages-ignore sts_hardware_interface: so_arm_control/so_arm_description both
+        # declare it as an exec_depend (colcon discovers it on disk via the submodule even
+        # with --packages-select) but it's a C++ ros2_control plugin with its own CI - not
+        # built here, same as lekiwi_ros2 ignores this exact submodule for the same reason.
+        # mujoco_ros2_control is skipped too: only needed for ros2_control_hardware_type:=mujoco,
+        # which nothing in the kept test suite exercises.
+        run: |
+          . /opt/ros/kilted/setup.sh
+          colcon build --packages-select so_arm_control so_arm_description \
+            --packages-ignore sts_hardware_interface
+
+      - name: pytest
+        # One pytest invocation PER FILE, not one for the whole directory: pinocchio
+        # (kinematics.py, most of the suite) and python-fcl (self_collision_checker.py) need
+        # incompatible numpy ABIs and can't both be imported in the same process, and which
+        # ROS message package a given test file imports first (e.g. sensor_msgs pulling in
+        # numpy before a pinocchio-dependent file gets a chance) is enough on its own to
+        # trigger the same conflict even between files that don't touch fcl at all - see
+        # so_arm_control/test/conftest.py's note. Every file passes on its own; only a
+        # combined run is unreliable. test_control_launch.py is excluded for the same reason
+        # sts_hardware_interface is ignored above: it launches control.launch.py, which needs
+        # that plugin actually built to activate controllers - not available here, covered by
+        # its own CI instead.
+        run: |
+          . /opt/ros/kilted/setup.sh
+          . install/setup.sh
+          cd src/so_arm_ros2/so_arm_control/test
+          FAILED=0
+          for f in test_*.py; do
+            if [ "$f" = "test_control_launch.py" ]; then
+              continue
+            fi
+            echo "::group::pytest $f"
+            pytest "$f" || FAILED=1
+            echo "::endgroup::"
+          done
+          exit $FAILED
