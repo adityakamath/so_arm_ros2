@@ -11,7 +11,7 @@
   <xacro:arg name="arm_operating_mode"     default="${arm_operating_mode}"/>     <!-- 0=Position 1=Velocity 2=PWM; arm joints 1-5; baked at startup -->
   <xacro:arg name="gripper_operating_mode" default="${gripper_operating_mode}"/> <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
 
-  <!-- "real" uses STS serial plugin; "mujoco" swaps for mujoco_ros2_control/MujocoSystemInterface. -->
+  <!-- real=STS serial plugin, mujoco=MujocoSystemInterface, mock_components=GenericSystem. -->
   <xacro:arg name="ros2_control_hardware_type" default="real"/>
   <!-- mujoco only -->
   <xacro:arg name="mujoco_model" default=""/>
@@ -339,6 +339,9 @@
         <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
         <param name="mujoco_model">$(arg mujoco_model)</param>
         <param name="headless">$(arg mujoco_headless)</param>
+      </xacro:if>
+      <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'mock_components'}">
+        <plugin>mock_components/GenericSystem</plugin>
       </xacro:if>
       <xacro:if value="${'$(arg ros2_control_hardware_type)' == 'real'}">
         <plugin>sts_hardware_interface/STSHardwareInterface</plugin>

@@ -24,8 +24,8 @@ _TIP_LINK = 'end_effector_link'
 
 
 @pytest.fixture(scope='module')
-def ik(so101_robot_description):
-    return _PinocchioIK(so101_robot_description, _JOINT_NAMES, _TIP_LINK, (0.0, 0.0, 0.0))
+def ik(robot_description):
+    return _PinocchioIK(robot_description, _JOINT_NAMES, _TIP_LINK, (0.0, 0.0, 0.0))
 
 
 def _random_in_limits(ik, seed):
@@ -68,7 +68,7 @@ class TestPinocchioIKJointLimit:
 
     def test_known_joint_limit(self, ik):
         lo, hi = ik.joint_limit('elbow_flex_joint')
-        assert lo < 0 < hi
+        assert lo < 0 <= hi  # so100's elbow_flex tops out exactly at 0, unlike so101's
 
     def test_unknown_joint_returns_none(self, ik):
         assert ik.joint_limit('not_a_real_joint') is None

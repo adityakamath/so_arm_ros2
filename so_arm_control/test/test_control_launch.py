@@ -2,9 +2,9 @@
 """
 launch_testing integration test for control.launch.py.
 
-Uses mock hardware (use_mock:=true - sts_hardware_interface's own enable_mock_mode, no
-serial port or real servos needed) so this runs on any machine/CI, not just the real
-robot.
+Uses use_mock_components:=true (ros2_control's built-in mock_components/GenericSystem) so
+this runs on any machine/CI without building sts_hardware_interface, a real serial port, or
+real servos.
 
 Exercises the real end-to-end path a user actually runs: robot_state_publisher ->
 controller_manager (mock) -> joint_state_broadcaster/so_arm_controller/gripper_controller ->
@@ -53,7 +53,7 @@ def generate_test_description():
     control = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(control_launch),
         launch_arguments={
-            'model': 'so101', 'use_mock': 'true', 'self_collision_check': 'true',
+            'model': 'so101', 'use_mock_components': 'true', 'self_collision_check': 'true',
         }.items(),
     )
     return launch.LaunchDescription([

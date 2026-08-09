@@ -117,6 +117,13 @@ class _PinocchioIK:
 
         self._data = self._model.createData()
         self._neutral_q = pin.neutral(self._model)
+        # solve()'s current=None cold start only - each solved joint's own mid-range, not raw
+        # pin.neutral()'s 0.0. For a one-sided range like so100's elbow_flex ([-pi, 0]), 0.0 sits
+        # exactly on the boundary, a poor Newton start; fk_position/_neutral_q are untouched.
+        self._cold_start_q = self._neutral_q.copy()
+        for name, iq in zip(self._joint_names, self._idx_qs):
+            lo, hi = self._limits[name]
+            self._cold_start_q[iq] = (lo + hi) / 2.0
         # pitch/yaw fixed; roll passed fresh each solve() call, driven live by the joystick.
         self._default_pitch = float(default_orientation[1])
         self._default_yaw = float(default_orientation[2])
@@ -145,7 +152,7 @@ class _PinocchioIK:
 
     def solve(self, target_xyz: tuple, current: dict | None, target_roll: float) -> dict | None:
         """Return {joint_name: angle} for target_xyz+target_roll, warm-started from `current`."""
-        q = self._q_from_joint_values(current)
+        q = self._cold_start_q.copy() if current is None else self._q_from_joint_values(current)
         target_xyz = np.array(target_xyz)
         target_R = _rpy_to_R(target_roll, self._default_pitch, self._default_yaw)
 

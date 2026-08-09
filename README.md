@@ -1,6 +1,6 @@
 # SO-ARM ROS 2
 
-[![ROS 2](https://img.shields.io/badge/ROS_2-Kilted-blue?logo=ros)](https://docs.ros.org)
+[![ROS 2](https://img.shields.io/badge/ROS_2-Kilted_%7C_Jazzy-blue?logo=ros)](https://docs.ros.org)
 [![CI](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -8,7 +8,7 @@
 
 ## ⚠️ Safety
 
-**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. While e-stopped, `ik_teleop_node` tracks the arm's live pose as its target instead of driving toward the pre-e-stop target, so releasing e-stop holds the arm where it was left by hand instead of snapping back.
+**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. While e-stopped, `ik_teleop_node` tracks the arm's live pose as its target instead of driving toward the pre-e-stop target, so releasing e-stop holds the arm where it was left by hand instead of snapping back. `/emergency_stop` is created by `sts_hardware_interface` itself, so it doesn't exist under `use_mock_components:=true` (a joystick e-stop toggle fails loudly with a "service not available" error there, not silently) — that mode is for ROS-graph testing only, never for anything near real hardware.
 
 This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. No warranty, express or implied — see [LICENSE](LICENSE).
 
@@ -25,7 +25,7 @@ Control interface note: waypoint recording/following is exposed through services
 
 ### Dependencies
 
-- **[ROS 2](https://docs.ros.org/en/kilted/)**: Tested with Kilted, but should work on other ROS 2 distributions
+- **[ROS 2](https://docs.ros.org/en/kilted/)**: CI-tested on Kilted and Jazzy
 - **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, and `parallel_gripper_controller`
 - **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `modules/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK solver shared by teleop and waypoint patrol
@@ -54,6 +54,8 @@ automatically disables self-collision checking instead of crashing. Install depe
 
 `sts_hardware_interface` is a submodule under `modules/`, left uninitialized by a plain clone. If you already have it elsewhere in this workspace (e.g. via `lekiwi_ros2/modules/`), leave it uninitialized here — colcon will find that copy. Otherwise, pull it in with `git submodule update --init --recursive` from `so_arm_ros2/` (`--recursive` also fetches its own `external/SCServo_Linux` submodule).
 
+No hardware (or `sts_hardware_interface` submodule) yet? `ros2 launch so_arm_control control.launch.py use_mock_components:=true` brings up the full stack against ros2_control's built-in mock plugin instead.
+
 In a separate terminal, once `control.launch.py` is up:
 
 ```bash
@@ -78,8 +80,9 @@ The most commonly used arguments for `so_arm_control control.launch.py` (run wit
 |------------------------------|---------|--------------------------------------------------------------------------|
 | `model`                      | `so101` | Robot model to launch: `so100` or `so101`                                |
 | `serial_port`                | `""`    | Serial port override; empty uses the xacro default (`/dev/ttySERVO`)     |
-| `use_mock`                   | `""`    | Mock hardware override (`true`/`false`); empty uses the xacro default    |
+| `use_mock`                   | `""`    | `sts_hardware_interface`'s own mock mode (`true`/`false`); needs it built |
 | `ros2_control_hardware_type` | `real`  | `real` for the STS hardware plugin, `mujoco` for MuJoCo simulation       |
+| `use_mock_components`        | `false` | Use ros2_control's built-in `mock_components/GenericSystem` instead - no hardware, MuJoCo, or `sts_hardware_interface` build needed; overrides `ros2_control_hardware_type` |
 | `self_collision_check`       | `true`  | Reject self-colliding targets; disable only for debugging                |
 | `use_sim_time`                | `false` | Use `/clock` from a simulator instead of system time                     |
 

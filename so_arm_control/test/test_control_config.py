@@ -181,7 +181,8 @@ class TestTeleopYaml:
 class TestControlLaunchArgs:
     EXPECTED_ARGS = [
         'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
-        'mujoco_model', 'mujoco_headless', 'input_topic', 'self_collision_check',
+        'use_mock_components', 'mujoco_model', 'mujoco_headless', 'input_topic',
+        'self_collision_check',
     ]
 
     def test_expected_args_declared(self):

@@ -22,11 +22,15 @@ jobs:
         run: ruff check .
 
   test:
-    name: pytest (ros:kilted)
+    name: pytest (ros:${{ matrix.ros_distro }})
     # rclpy and the ROS message packages the test suite needs aren't on PyPI, so this
     # runs inside a ROS image instead of alongside the pip-only lint job above.
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [kilted, jazzy]
     runs-on: ubuntu-latest
-    container: ros:kilted
+    container: ros:${{ matrix.ros_distro }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -38,29 +42,29 @@ jobs:
         run: |
           apt-get update && apt-get install -y --no-install-recommends \
             python3-pip python3-yaml python3-numpy git libfcl-dev \
-            ros-kilted-ament-index-python \
-            ros-kilted-control-msgs \
-            ros-kilted-controller-manager \
-            ros-kilted-controller-manager-msgs \
-            ros-kilted-effort-controllers \
-            ros-kilted-joint-state-broadcaster \
-            ros-kilted-joint-trajectory-controller \
-            ros-kilted-joy \
-            ros-kilted-joy-teleop \
-            ros-kilted-launch-testing \
-            ros-kilted-launch-testing-ros \
-            ros-kilted-parallel-gripper-controller \
-            ros-kilted-pinocchio \
-            ros-kilted-robot-state-publisher \
-            ros-kilted-ros2-control \
-            ros-kilted-ros2-controllers \
-            ros-kilted-tf2-ros \
-            ros-kilted-xacro
+            ros-${{ matrix.ros_distro }}-ament-index-python \
+            ros-${{ matrix.ros_distro }}-control-msgs \
+            ros-${{ matrix.ros_distro }}-controller-manager \
+            ros-${{ matrix.ros_distro }}-controller-manager-msgs \
+            ros-${{ matrix.ros_distro }}-effort-controllers \
+            ros-${{ matrix.ros_distro }}-joint-state-broadcaster \
+            ros-${{ matrix.ros_distro }}-joint-trajectory-controller \
+            ros-${{ matrix.ros_distro }}-joy \
+            ros-${{ matrix.ros_distro }}-joy-teleop \
+            ros-${{ matrix.ros_distro }}-launch-testing \
+            ros-${{ matrix.ros_distro }}-launch-testing-ros \
+            ros-${{ matrix.ros_distro }}-parallel-gripper-controller \
+            ros-${{ matrix.ros_distro }}-pinocchio \
+            ros-${{ matrix.ros_distro }}-robot-state-publisher \
+            ros-${{ matrix.ros_distro }}-ros2-control \
+            ros-${{ matrix.ros_distro }}-ros2-controllers \
+            ros-${{ matrix.ros_distro }}-tf2-ros \
+            ros-${{ matrix.ros_distro }}-xacro
           pip install --break-system-packages --ignore-installed \
             -r src/so_arm_ros2/requirements-dev.txt
           # --user, not a plain system install: kinematics.py strips any sys.path entry
           # containing '/.local/lib/' before importing pinocchio (needs the numpy 1.x ABI
-          # from ros-kilted-pinocchio's apt install above, not a newer pip-installed one).
+          # from the ros2-pinocchio apt install above, not a newer pip-installed one).
           # python-fcl/numpy-stl pull in their own numpy as a transitive dependency; without
           # --user that lands in /usr/local/lib (not matched by the filter) and shadows the
           # correct one, crashing pinocchio's import with a numpy ABI mismatch.
@@ -72,14 +76,15 @@ jobs:
         # declare it as an exec_depend (colcon discovers it on disk via the submodule even
         # with --packages-select) but it's a C++ ros2_control plugin with its own CI - not
         # built here, same as lekiwi_ros2 ignores this exact submodule for the same reason.
-        # mujoco_ros2_control is skipped too: only needed for ros2_control_hardware_type:=mujoco,
-        # which nothing in the kept test suite exercises.
+        # test_control_launch.py runs with use_mock_components:=true, so it doesn't need it built.
+        # mujoco_ros2_control is skipped too: so_arm_description's xacro tests only check that
+        # ros2_control_hardware_type:=mujoco emits the right <plugin> text, they don't load it.
         run: |
-          . /opt/ros/kilted/setup.sh
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
           colcon build --packages-select so_arm_control so_arm_description \
             --packages-ignore sts_hardware_interface
 
-      - name: pytest
+      - name: pytest (so_arm_control)
         # One pytest invocation PER FILE, not one for the whole directory: pinocchio
         # (kinematics.py, most of the suite) and python-fcl (self_collision_checker.py) need
         # incompatible numpy ABIs and can't both be imported in the same process, and which
@@ -87,21 +92,23 @@ jobs:
         # numpy before a pinocchio-dependent file gets a chance) is enough on its own to
         # trigger the same conflict even between files that don't touch fcl at all - see
         # so_arm_control/test/conftest.py's note. Every file passes on its own; only a
-        # combined run is unreliable. test_control_launch.py is excluded for the same reason
-        # sts_hardware_interface is ignored above: it launches control.launch.py, which needs
-        # that plugin actually built to activate controllers - not available here, covered by
-        # its own CI instead.
+        # combined run is unreliable.
         run: |
-          . /opt/ros/kilted/setup.sh
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
           . install/setup.sh
           cd src/so_arm_ros2/so_arm_control/test
           FAILED=0
           for f in test_*.py; do
-            if [ "$f" = "test_control_launch.py" ]; then
-              continue
-            fi
             echo "::group::pytest $f"
             pytest "$f" || FAILED=1
             echo "::endgroup::"
           done
           exit $FAILED
+
+      - name: pytest (so_arm_description)
+        # No pinocchio/fcl here, so unlike so_arm_control this is a single ordinary pytest run.
+        run: |
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+          . install/setup.sh
+          cd src/so_arm_ros2/so_arm_description/test
+          pytest test_urdf_xacro.py

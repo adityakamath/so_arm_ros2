@@ -11,6 +11,8 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
+from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS, urdf_xacro_path
+
 
 def launch_setup(context):
     model = LaunchConfiguration('model').perform(context)
@@ -18,6 +20,10 @@ def launch_setup(context):
     use_mock = LaunchConfiguration('use_mock').perform(context)
     use_sim_time = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
     hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
+    use_mock_components = (
+        LaunchConfiguration('use_mock_components').perform(context).lower() in ('true', '1')
+    )
+    effective_hw_type = 'mock_components' if use_mock_components else hw_type
     mujoco_model = LaunchConfiguration('mujoco_model').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     input_topic = LaunchConfiguration('input_topic').perform(context)
@@ -30,7 +36,7 @@ def launch_setup(context):
     # MJCF must land on disk (mesh paths are filesystem-based), unlike robot_description below.
     if mujoco_model:
         final_mujoco_model = mujoco_model
-    elif hw_type == 'mujoco':
+    elif effective_hw_type == 'mujoco':
         mjcf_xml = subprocess.run(
             [xacro, f'{pkg_desc}/mjcf/so_arm.mjcf.xacro', f'so_arm_config:={model}'],
             capture_output=True, text=True, check=True,
@@ -43,14 +49,15 @@ def launch_setup(context):
     else:
         final_mujoco_model = ''
 
-    xacro_cmd = f'{xacro} {pkg_desc}/urdf/{model}/{model}.urdf.xacro'
+    xacro_cmd = f'{xacro} {urdf_xacro_path(pkg_desc, model)}'
     if serial_port:
         xacro_cmd += f' serial_port:={serial_port}'
     if use_mock:
         xacro_cmd += f' use_mock:={use_mock}'
-    if hw_type == 'mujoco':
+    if effective_hw_type != 'real':
+        xacro_cmd += f' ros2_control_hardware_type:={effective_hw_type}'
+    if effective_hw_type == 'mujoco':
         xacro_cmd += (
-            f' ros2_control_hardware_type:={hw_type}'
             f' mujoco_model:={final_mujoco_model}'
             f' mujoco_headless:={mujoco_headless}'
         )
@@ -88,7 +95,9 @@ def launch_setup(context):
         output='both',
     )
 
-    control_node_actions = [mujoco_control_node] if hw_type == 'mujoco' else [controller_manager]
+    control_node_actions = (
+        [mujoco_control_node] if effective_hw_type == 'mujoco' else [controller_manager]
+    )
 
     bridge_config = f'{pkg_ctrl}/config/joint_trajectory_bridge.yaml'
     bridge_overrides = {'input_topic': input_topic} if input_topic else {}
@@ -135,7 +144,7 @@ def generate_launch_description():
             'model',
             default_value='so101',
             description='so100 or so101',
-            choices=['so100', 'so101'],
+            choices=list(VALID_MODELS),
         ),
         DeclareLaunchArgument(
             'serial_port',
@@ -156,6 +165,12 @@ def generate_launch_description():
             'ros2_control_hardware_type',
             default_value='real',
             description='real or mujoco',
+            choices=['real', 'mujoco'],
+        ),
+        DeclareLaunchArgument(
+            'use_mock_components',
+            default_value='false',
+            description='Use mock_components/GenericSystem; overrides ros2_control_hardware_type.',
         ),
         DeclareLaunchArgument(
             'mujoco_model',
