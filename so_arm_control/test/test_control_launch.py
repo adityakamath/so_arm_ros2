@@ -78,9 +78,20 @@ def _wait_for_message(node, topic, msg_type, timeout=30.0, qos=10):
     return received[0] if received else None
 
 
-def _collect_messages(node, topic, msg_type, duration):
+def _collect_messages(node, topic, msg_type, duration, after_subscribed=None):
+    """
+    If after_subscribed is given, it's called (e.g. to publish a one-shot trigger message)
+    only once this subscription has actually matched a publisher on the topic - otherwise a
+    trigger fired immediately after create_subscription() can beat DDS discovery and never be
+    seen, since nothing here re-sends it.
+    """
     received = []
     sub = node.create_subscription(msg_type, topic, received.append, 10)
+    if after_subscribed is not None:
+        deadline = time.monotonic() + 10.0
+        while sub.get_publisher_count() == 0 and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.2)
+        after_subscribed()
     deadline = time.monotonic() + duration
     while time.monotonic() < deadline:
         rclpy.spin_once(node, timeout_sec=0.2)
@@ -155,17 +166,17 @@ class TestJointTrajectoryBridgeIntegration(unittest.TestCase):
         self._pub.publish(msg)
 
     def test_safe_target_is_forwarded(self):
-        self._publish_target(shoulder_pan_joint=0.1)
         messages = _collect_messages(
             self._node, '/so_arm_controller/joint_trajectory', JointTrajectory, duration=3.0,
+            after_subscribed=lambda: self._publish_target(shoulder_pan_joint=0.1),
         )
         self.assertTrue(messages, 'no /so_arm_controller/joint_trajectory published')
 
     def test_self_colliding_target_is_not_forwarded_unclamped(self):
         """A real self-collision: elbow_flex_joint at -1.69 (see test_self_collision_checker)."""
-        self._publish_target(elbow_flex_joint=-1.69)
         messages = _collect_messages(
             self._node, '/so_arm_controller/joint_trajectory', JointTrajectory, duration=3.0,
+            after_subscribed=lambda: self._publish_target(elbow_flex_joint=-1.69),
         )
         for msg in messages:
             idx = list(msg.joint_names).index('elbow_flex_joint')
