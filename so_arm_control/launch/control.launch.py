@@ -28,6 +28,8 @@ def launch_setup(context):
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     input_topic = LaunchConfiguration('input_topic').perform(context)
     self_collision_check = LaunchConfiguration('self_collision_check').perform(context).strip()
+    recordings_dir = LaunchConfiguration('recordings_dir').perform(context).strip()
+    replay_gripper = LaunchConfiguration('replay_gripper').perform(context).strip()
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
@@ -114,6 +116,20 @@ def launch_setup(context):
         parameters=[bridge_config, bridge_overrides],
     )
 
+    record_replay_config = f'{pkg_ctrl}/config/record_replay.yaml'
+    record_replay_overrides = {}
+    if recordings_dir:
+        record_replay_overrides['recordings_dir'] = recordings_dir
+    if replay_gripper:
+        record_replay_overrides['replay_gripper'] = replay_gripper.lower() in ('true', '1')
+    record_replay_node = Node(
+        package='so_arm_control',
+        executable='record_replay_node',
+        name='record_replay_node',
+        output='screen',
+        parameters=[record_replay_config, record_replay_overrides],
+    )
+
     return [
         robot_state_publisher_node,
         *control_node_actions,
@@ -134,7 +150,7 @@ def launch_setup(context):
                            '--controller-manager-timeout', '30'], output='both',
             ),
         ]),
-        TimerAction(period=3.0, actions=[joint_trajectory_bridge_node]),
+        TimerAction(period=3.0, actions=[joint_trajectory_bridge_node, record_replay_node]),
     ]
 
 
@@ -191,6 +207,16 @@ def generate_launch_description():
             'self_collision_check',
             default_value='',
             description='Override enable_self_collision_check; empty uses yaml value.',
+        ),
+        DeclareLaunchArgument(
+            'recordings_dir',
+            default_value='',
+            description="Override record_replay_node's recordings_dir; empty uses yaml value.",
+        ),
+        DeclareLaunchArgument(
+            'replay_gripper',
+            default_value='',
+            description="Override record_replay_node's replay_gripper; empty uses yaml value.",
         ),
     ]
 

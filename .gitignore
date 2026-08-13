@@ -40,3 +40,6 @@ dist/
 
 # Test results
 test_results/
+
+# so_arm record & replay: local rosbag2/mcap recordings, never pushed
+/recordings/

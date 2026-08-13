@@ -93,7 +93,11 @@ bool_toggle_node:
 joint_state_switch_node:
   ros__parameters:
     output_topic: /joint_commands  # joint_trajectory_bridge's input
-    inputs: ["patrol", "gui", "ik"]  # priority order, first = highest; ik is the fallback
+    # priority order, first = highest; ik is the fallback. replay is highest so it locks out
+    # teleop while active - pausing/finishing/e-stop all flip /replay false, handing control back.
+    inputs: ["replay", "patrol", "gui", "ik"]
+    replay.topic: /joint_commands_replay
+    replay.observe_service: /replay  # owned by record_replay_node, in control.launch.py
     patrol.topic: /joint_commands_patrol
     patrol.observe_service: /waypoint_follow  # mirrors waypoint_follow_node's own service
     gui.topic: /joint_commands_gui
@@ -125,5 +129,5 @@ ik_teleop_node:
     default_orientation: [0.0, 0.0, 0.0]
     publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
     max_acceleration: 400.0  # rad/s^2 - caps velocity change tick to tick, see _kinematic_limit
-    # meters - caps ik_target distance from base; 0 disables. 
+    # meters - caps ik_target distance from base; 0 disables.
     max_target_reach: 0.45

@@ -12,6 +12,8 @@ joint_trajectory_bridge, including the self-collision checker built from the rea
 """
 
 import itertools
+import os
+import tempfile
 import time
 import unittest
 
@@ -27,7 +29,12 @@ import rclpy
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
+from std_srvs.srv import SetBool
 from trajectory_msgs.msg import JointTrajectory
+
+# recording_node would otherwise write into the real so_arm_ros2/recordings/ - keep test runs
+# out of it.
+_TEST_RECORDINGS_DIR = tempfile.mkdtemp(prefix='so_arm_control_test_recordings_')
 
 _JOINT_NAMES = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_flex_joint',
@@ -54,6 +61,7 @@ def generate_test_description():
         launch.launch_description_sources.PythonLaunchDescriptionSource(control_launch),
         launch_arguments={
             'model': 'so101', 'use_mock_components': 'true', 'self_collision_check': 'true',
+            'recordings_dir': _TEST_RECORDINGS_DIR,
         }.items(),
     )
     return launch.LaunchDescription([
@@ -138,6 +146,48 @@ class TestControlStackComesUp(unittest.TestCase):
                     break
             time.sleep(0.5)
         self.assertTrue(expected <= active, f'not all controllers active: {active}')
+
+    def test_record_service_available(self):
+        client = self._node.create_client(SetBool, '/record')
+        self.assertTrue(client.wait_for_service(timeout_sec=30.0), '/record never available')
+
+    def test_replay_service_available(self):
+        client = self._node.create_client(SetBool, '/replay')
+        self.assertTrue(client.wait_for_service(timeout_sec=30.0), '/replay never available')
+
+
+class TestRecordingIntegration(unittest.TestCase):
+    """Round-trips /record against the real filesystem, in an isolated temp recordings_dir."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._node = _make_node()
+        cls._client = cls._node.create_client(SetBool, '/record')
+        assert cls._client.wait_for_service(timeout_sec=30.0), '/record never available'
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._node.destroy_node()
+
+    def _call(self, data):
+        future = self._client.call_async(SetBool.Request(data=data))
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=10.0)
+        return future.result()
+
+    def test_start_stop_writes_a_bag(self):
+        start = self._call(True)
+        self.assertTrue(start is not None and start.success, getattr(start, 'message', None))
+        # Let a few /joint_states ticks land before stopping, so the bag isn't empty.
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            rclpy.spin_once(self._node, timeout_sec=0.2)
+        stop = self._call(False)
+        self.assertTrue(stop is not None and stop.success, getattr(stop, 'message', None))
+
+        recordings = os.listdir(_TEST_RECORDINGS_DIR)
+        self.assertEqual(len(recordings), 1, f'expected one recording, found {recordings}')
+        bag_dir = os.path.join(_TEST_RECORDINGS_DIR, recordings[0])
+        self.assertTrue(os.path.isfile(os.path.join(bag_dir, 'metadata.yaml')))
 
 
 class TestJointTrajectoryBridgeIntegration(unittest.TestCase):
