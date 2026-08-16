@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Node-level unit tests for gripper_teleop_node: _remap() and _on_timer()'s gating logic.
+Node-level unit tests for teleop_gripper_node: _remap() and _on_timer()'s gating logic.
 
-GripperTeleopNode's parameters all have real defaults (unlike bool_toggle_node/
+TeleopGripperNode's parameters all have real defaults (unlike bool_toggle_node/
 joint_state_switch_node), so it's directly constructible with no overrides.
 """
 
 import pytest
 
-from so_arm_control.gripper_teleop_node import _remap, GripperTeleopNode
+from so_arm_control.teleop_gripper_node import _remap, TeleopGripperNode
 
 
 class _FakeClient:
@@ -49,7 +49,7 @@ class TestRemap:
 
 @pytest.fixture
 def node():
-    n = GripperTeleopNode()
+    n = TeleopGripperNode()
     n._client = _FakeClient()
     n._limit = (-1.0, 1.0)
     yield n

@@ -1,0 +1,19 @@
+/**/bool_toggle_node:
+  ros__parameters:
+    toggles: ["emergency_stop"]
+    emergency_stop:
+      trigger_service: emergency_stop_toggle
+      target_service: emergency_stop  # served by sts_hardware_interface, outside so_arm_control
+      initial_state: false
+      publish_status_topic: emergency_stop_active
+
+/**/joint_state_switch_node:
+  ros__parameters:
+    output_topic: joint_commands  # joint_trajectory_bridge's input
+    publish_rate: 50.0
+    # replay (leader's record_replay_node, output redirected here) outranks live leader
+    # tracking; leader_track is the service-less always-active fallback.
+    inputs: ["replay", "leader_track"]
+    replay.topic: joint_commands_replay
+    replay.status_topic: /leader/replay_active
+    leader_track.topic: /leader/joint_states

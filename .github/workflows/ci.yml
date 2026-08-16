@@ -46,7 +46,9 @@ jobs:
             ros-${{ matrix.ros_distro }}-control-msgs \
             ros-${{ matrix.ros_distro }}-controller-manager \
             ros-${{ matrix.ros_distro }}-controller-manager-msgs \
+            ros-${{ matrix.ros_distro }}-diagnostic-msgs \
             ros-${{ matrix.ros_distro }}-effort-controllers \
+            ros-${{ matrix.ros_distro }}-hardware-interface \
             ros-${{ matrix.ros_distro }}-joint-state-broadcaster \
             ros-${{ matrix.ros_distro }}-joint-trajectory-controller \
             ros-${{ matrix.ros_distro }}-joy \
@@ -55,9 +57,13 @@ jobs:
             ros-${{ matrix.ros_distro }}-launch-testing-ros \
             ros-${{ matrix.ros_distro }}-parallel-gripper-controller \
             ros-${{ matrix.ros_distro }}-pinocchio \
+            ros-${{ matrix.ros_distro }}-pluginlib \
+            ros-${{ matrix.ros_distro }}-rclcpp-lifecycle \
             ros-${{ matrix.ros_distro }}-robot-state-publisher \
             ros-${{ matrix.ros_distro }}-ros2-control \
             ros-${{ matrix.ros_distro }}-ros2-controllers \
+            ros-${{ matrix.ros_distro }}-rosidl-default-generators \
+            ros-${{ matrix.ros_distro }}-std-srvs \
             ros-${{ matrix.ros_distro }}-tf2-ros \
             ros-${{ matrix.ros_distro }}-xacro
           pip install --break-system-packages --ignore-installed \
@@ -72,17 +78,16 @@ jobs:
             -r src/so_arm_ros2/so_arm_control/requirements.txt
 
       - name: colcon build
-        # --packages-ignore sts_hardware_interface: so_arm_control/so_arm_description both
-        # declare it as an exec_depend (colcon discovers it on disk via the submodule even
-        # with --packages-select) but it's a C++ ros2_control plugin with its own CI - not
-        # built here, same as lekiwi_ros2 ignores this exact submodule for the same reason.
-        # test_control_launch.py runs with use_mock_components:=true, so it doesn't need it built.
-        # mujoco_ros2_control is skipped too: so_arm_description's xacro tests only check that
+        # sts_hardware_interface is built here (not ignored): test_control_launch.py runs with
+        # use_mock:=true, which loads the real STS hardware plugin with servo I/O faked
+        # internally, so the plugin itself has to exist. Its own dependencies (hardware_interface,
+        # pluginlib, rclcpp_lifecycle, std_srvs, diagnostic_msgs, rosidl_default_generators) are
+        # installed above.
+        # mujoco_ros2_control is skipped: so_arm_description's xacro tests only check that
         # ros2_control_hardware_type:=mujoco emits the right <plugin> text, they don't load it.
         run: |
           . /opt/ros/${{ matrix.ros_distro }}/setup.sh
-          colcon build --packages-select so_arm_control so_arm_description \
-            --packages-ignore sts_hardware_interface
+          colcon build --packages-select so_arm_control so_arm_bringup so_arm_description sts_hardware_interface
 
       - name: pytest (so_arm_control)
         # One pytest invocation PER FILE, not one for the whole directory: pinocchio
@@ -104,6 +109,15 @@ jobs:
             echo "::endgroup::"
           done
           exit $FAILED
+
+      - name: pytest (so_arm_bringup)
+        # No pinocchio/fcl here either, so unlike so_arm_control this is a single ordinary
+        # pytest run across the whole directory.
+        run: |
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+          . install/setup.sh
+          cd src/so_arm_ros2/so_arm_bringup/test
+          pytest .
 
       - name: pytest (so_arm_description)
         # No pinocchio/fcl here, so unlike so_arm_control this is a single ordinary pytest run.

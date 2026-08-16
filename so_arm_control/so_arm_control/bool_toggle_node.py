@@ -3,22 +3,12 @@
 
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.duration import Duration
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, LivelinessPolicy, QoSProfile, ReliabilityPolicy
-from service_msgs.msg import ServiceEventInfo
-from std_srvs.srv import SetBool, SetBool_Event, Trigger
-
-# Matches /emergency_stop, /twist_switch, /waypoint_follow's own introspection QoS - transient
-# local is required for replay, a volatile request would never get the cached last event.
-STATE_SERVICE_QOS = QoSProfile(
-    depth=2,
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-    liveliness=LivelinessPolicy.AUTOMATIC,
-    liveliness_lease_duration=Duration(seconds=1),
-)
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
+from so_arm_control.so_arm_utils.service_event import subscribe_service_event
+from so_arm_control.so_arm_utils.spin import spin_and_shutdown
+from std_msgs.msg import Bool
+from std_srvs.srv import SetBool, Trigger
 
 
 class BoolToggle:
@@ -31,12 +21,24 @@ class BoolToggle:
         trigger_service: str,
         target_service: str,
         initial_state: bool,
+        status_topic: str = '',
+        publish_status_topic: str = '',
     ):
-        """Create the Trigger server and SetBool client for this toggle."""
+        """Create the Trigger server and SetBool client for this toggle.
+
+        status_topic: target_service's owner already publishes its state here - subscribe
+        instead of introspecting. publish_status_topic: target_service has no such topic (e.g.
+        emergency_stop, served outside so_arm_control) - introspect it directly and republish.
+        """
         self._node = node
         self._name = name
         self._active = initial_state
         self._target_service = target_service
+
+        self._status_pub = None
+        if publish_status_topic:
+            self._status_pub = node.create_publisher(Bool, publish_status_topic, LATCHED_BOOL_QOS)
+            self._status_pub.publish(Bool(data=initial_state))
 
         # Needs its own reentrant group, not the default - the Trigger handler below calls
         # and awaits this same client, so the default group would hang after the first call.
@@ -45,44 +47,29 @@ class BoolToggle:
         )
         node.create_service(Trigger, trigger_service, self._handle_trigger)
 
-        # (client_gid, sequence_number) -> request value, populated on REQUEST_RECEIVED and
-        # consumed on RESPONSE_SENT - same correlation lekiwi_audio's indicator_node uses.
-        self._pending_target_calls = {}
-        node.create_subscription(
-            SetBool_Event,
-            f'{target_service}/_service_event',
-            self._on_target_service_event,
-            STATE_SERVICE_QOS,
-        )
+        if status_topic:
+            node.create_subscription(
+                Bool, status_topic, lambda msg: self._on_target_change(msg.data), LATCHED_BOOL_QOS,
+            )
+        else:
+            # Syncs _active to every successful call to target_service, from any caller - not
+            # just ones made through this toggle's own Trigger.
+            subscribe_service_event(node, target_service, self._on_target_change)
 
         node.get_logger().info(
             f"toggle '{name}' ready: {trigger_service} -> {target_service} "
             f'(initial_state={initial_state})'
         )
 
-    def _on_target_service_event(self, msg: SetBool_Event) -> None:
-        """Sync _active to every successful call to target_service, from any caller."""
-        key = (bytes(msg.info.client_gid), msg.info.sequence_number)
-
-        if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
-            if msg.request:
-                self._pending_target_calls[key] = msg.request[0].data
-            if len(self._pending_target_calls) > 16:  # defensive cap, shouldn't normally fill
-                self._pending_target_calls.pop(next(iter(self._pending_target_calls)), None)
-            return
-
-        if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
-            if key not in self._pending_target_calls or not msg.response:
-                return
-            request_value = self._pending_target_calls.pop(key)
-            if not msg.response[0].success:
-                return
-            if request_value != self._active:
-                self._node.get_logger().info(
-                    f"toggle '{self._name}': synced to {self._target_service} -> "
-                    f'{"ACTIVE" if request_value else "INACTIVE"}'
-                )
-            self._active = request_value
+    def _on_target_change(self, value: bool) -> None:
+        if value != self._active:
+            self._node.get_logger().info(
+                f"toggle '{self._name}': synced to {self._target_service} -> "
+                f'{"ACTIVE" if value else "INACTIVE"}'
+            )
+        self._active = value
+        if self._status_pub is not None:
+            self._status_pub.publish(Bool(data=value))
 
     async def _handle_trigger(
         self,
@@ -138,10 +125,14 @@ class BoolToggleNode(Node):
             self.declare_parameter(f'{name}.trigger_service', '')
             self.declare_parameter(f'{name}.target_service', '')
             self.declare_parameter(f'{name}.initial_state', False)
+            self.declare_parameter(f'{name}.status_topic', '')
+            self.declare_parameter(f'{name}.publish_status_topic', '')
 
             trigger_service = self.get_parameter(f'{name}.trigger_service').value
             target_service = self.get_parameter(f'{name}.target_service').value
             initial_state = self.get_parameter(f'{name}.initial_state').value
+            status_topic = self.get_parameter(f'{name}.status_topic').value
+            publish_status_topic = self.get_parameter(f'{name}.publish_status_topic').value
 
             if not trigger_service or not target_service:
                 raise ValueError(
@@ -149,7 +140,10 @@ class BoolToggleNode(Node):
                 )
 
             self._toggles.append(
-                BoolToggle(self, name, trigger_service, target_service, initial_state)
+                BoolToggle(
+                    self, name, trigger_service, target_service, initial_state,
+                    status_topic, publish_status_topic,
+                )
             )
 
         if not self._toggles:
@@ -160,15 +154,7 @@ def main(args=None):
     """Initialize rclpy, spin BoolToggleNode, and shut down cleanly."""
     rclpy.init(args=args)
     node = BoolToggleNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        print('Received keyboard interrupt!')
-    except ExternalShutdownException:
-        print('Received external shutdown request!')
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+    spin_and_shutdown(node)
 
 
 if __name__ == '__main__':

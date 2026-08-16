@@ -17,8 +17,10 @@ _CFG = os.path.join(_PKG_SRC, 'config')
 
 
 def _load(name):
+    """Load a config yaml, stripping node names' leading '/**/' wildcard-namespace prefix."""
     with open(os.path.join(_CFG, name)) as f:
-        return yaml.safe_load(f)
+        raw = yaml.safe_load(f)
+    return {key.removeprefix('/**/'): value for key, value in raw.items()}
 
 
 def _show_arguments(package, launch_file):
@@ -86,6 +88,13 @@ class TestJointTrajectoryBridgeYaml:
                     'enable_self_collision_check'):
             assert key in self.params, f"Missing key '{key}' in joint_trajectory_bridge.yaml"
 
+    def test_topics_are_relative_for_namespace_support(self):
+        """Absolute (leading '/') topics/services can't be isolated by leader/follower
+        namespacing - see docs/plans/2026-08-14-leader-follower-launch-design.md."""
+        for key in ('input_topic', 'output_topic', 'robot_description_topic',
+                    'joint_states_topic'):
+            assert not self.params[key].startswith('/'), f"'{key}' must not be absolute"
+
     def test_joint_names_non_empty_and_exclude_gripper(self):
         """The bridge only commands the 5-DOF arm - the gripper has its own action controller."""
         names = self.params['joint_names']
@@ -97,7 +106,7 @@ class TestJointTrajectoryBridgeYaml:
         assert self.params['enable_self_collision_check'] is True
 
     def test_output_topic_feeds_so_arm_controller(self):
-        assert self.params['output_topic'] == '/so_arm_controller/joint_trajectory'
+        assert self.params['output_topic'] == 'so_arm_controller/joint_trajectory'
 
 
 # ── teleop.yaml ──────────────────────────────────────────────────────────────
@@ -125,7 +134,7 @@ class TestTeleopYaml:
 
     def test_toggle_services_present(self):
         actions = self.cfg['joy_teleop']['ros__parameters']
-        for svc in ('estop_toggle', 'joint_state_switch_toggle', 'waypoint_follow_toggle'):
+        for svc in ('estop_toggle', 'joint_state_switch_toggle'):
             assert svc in actions, f"Missing toggle service '{svc}' in teleop.yaml"
 
     def test_bool_toggle_node_present(self):
@@ -135,7 +144,6 @@ class TestTeleopYaml:
         toggles = self.cfg['bool_toggle_node']['ros__parameters']['toggles']
         assert 'emergency_stop' in toggles
         assert 'joint_state_switch' in toggles
-        assert 'waypoint_follow' in toggles
 
     def test_each_toggle_has_required_fields(self):
         params = self.cfg['bool_toggle_node']['ros__parameters']
@@ -149,33 +157,27 @@ class TestTeleopYaml:
         """Emergency_stop's target_service is owned by the hardware interface, not this pkg."""
         estop = self.cfg['bool_toggle_node']['ros__parameters']['emergency_stop']
         target = estop['target_service']
-        assert target == '/emergency_stop'
+        assert target == 'emergency_stop'
 
     def test_joint_state_switch_node_priority_order(self):
-        """Ik is the fallback (last); replay outranks patrol so it can lock out teleop."""
+        """Ik is the fallback (last); replay is highest so it can lock out teleop."""
         inputs = self.cfg['joint_state_switch_node']['ros__parameters']['inputs']
         assert inputs[-1] == 'ik'
         assert inputs[0] == 'replay'
-        assert inputs.index('replay') < inputs.index('patrol')
 
-    def test_replay_input_observes_record_replay_nodes_own_service(self):
+    def test_replay_input_watches_record_replay_nodes_status_topic(self):
         params = self.cfg['joint_state_switch_node']['ros__parameters']
-        assert params['replay.observe_service'] == '/replay'
+        assert params['replay.status_topic'] == 'replay_active'
 
     def test_ik_input_has_no_switch_service(self):
         """The fallback input has neither service - _active_input_name() treats it as default."""
         params = self.cfg['joint_state_switch_node']['ros__parameters']
         assert 'ik.own_service' not in params
-        assert 'ik.observe_service' not in params
+        assert 'ik.status_topic' not in params
 
-    def test_end_effector_link_matches_between_ik_teleop_and_waypoint_follow(self):
-        ik_link = self.cfg['ik_teleop_node']['ros__parameters']['end_effector_link']
-        wp_link = self.cfg['waypoint_follow_node']['ros__parameters']['end_effector_link']
-        assert ik_link == wp_link == 'end_effector_link'
-
-    def test_ik_teleop_publish_rate_matches_control_yaml_update_rate(self):
-        """ik_teleop_node's publish_rate must match control.yaml's rate or slew-limits desync."""
-        ik_rate = self.cfg['ik_teleop_node']['ros__parameters']['publish_rate']
+    def test_teleop_ik_publish_rate_matches_control_yaml_update_rate(self):
+        """teleop_ik_node's publish_rate must match control.yaml's rate or slew-limits desync."""
+        ik_rate = self.cfg['teleop_ik_node']['ros__parameters']['publish_rate']
         control_cfg = _load('control.yaml')
         update_rate = control_cfg['controller_manager']['ros__parameters']['update_rate']
         assert ik_rate == update_rate
@@ -186,21 +188,28 @@ class TestTeleopYaml:
 class TestRecordReplayYaml:
 
     def setup_method(self):
-        self.cfg = _load('record_replay.yaml')
+        self.cfg = _load('teleop.yaml')
         self.params = self.cfg['record_replay_node']['ros__parameters']
 
     def test_required_keys_present(self):
         for key in ('recordings_dir', 'joint_states_topic', 'dynamic_joint_states_topic',
-                    'estop_service', 'output_topic', 'joint_names', 'publish_rate',
-                    'replay_gripper', 'gripper_joint', 'gripper_action_name'):
+                    'tf_topic', 'estop_status_topic', 'output_topic', 'joint_names',
+                    'publish_rate', 'replay_loops', 'gripper_joint', 'gripper_action_name'):
             assert key in self.params, f"Missing key '{key}' in record_replay.yaml"
 
-    def test_topics_match_joint_state_broadcaster_output(self):
-        assert self.params['joint_states_topic'] == '/joint_states'
-        assert self.params['dynamic_joint_states_topic'] == '/dynamic_joint_states'
+    def test_topics_are_relative_for_namespace_support(self):
+        for key in ('joint_states_topic', 'dynamic_joint_states_topic', 'tf_topic',
+                    'estop_status_topic', 'output_topic'):
+            assert not self.params[key].startswith('/'), f"'{key}' must not be absolute"
 
-    def test_estop_service_matches_hardware_interface(self):
-        assert self.params['estop_service'] == '/emergency_stop'
+    def test_topics_match_joint_state_broadcaster_output(self):
+        assert self.params['joint_states_topic'] == 'joint_states'
+        assert self.params['dynamic_joint_states_topic'] == 'dynamic_joint_states'
+
+    def test_estop_status_topic_matches_bool_toggle_publish(self):
+        """Must match bool_toggle_node's emergency_stop.publish_status_topic (teleop.yaml)."""
+        toggle_params = self.cfg['bool_toggle_node']['ros__parameters']
+        assert self.params['estop_status_topic'] == toggle_params['emergency_stop']['publish_status_topic']
 
     def test_joint_names_exclude_gripper(self):
         """Gripper goes through the gripper_controller action, not joint_commands_replay."""
@@ -224,8 +233,7 @@ class TestRecordReplayYaml:
 class TestControlLaunchArgs:
     EXPECTED_ARGS = [
         'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
-        'use_mock_components', 'mujoco_model', 'mujoco_headless', 'input_topic',
-        'self_collision_check', 'recordings_dir', 'replay_gripper',
+        'mujoco_headless', 'frame_prefix',
     ]
 
     def test_expected_args_declared(self):
@@ -240,8 +248,14 @@ class TestControlLaunchArgs:
 
 
 class TestTeleopLaunchArgs:
+    EXPECTED_ARGS = [
+        'recordings_dir', 'record_replay_output_topic', 'record_replay_gripper_action_name',
+        'record_replay_estop_status_topic', 'replay_loops', 'frame_prefix',
+    ]
 
-    def test_takes_no_launch_arguments(self):
-        """teleop.launch.py loads teleop.yaml directly - documented as argument-free."""
+    def test_expected_args_declared(self):
+        """teleop.launch.py loads teleop.yaml directly, plus these override/leader-follower
+        args - see control.launch.py's own frame_prefix for the matching control-side arg."""
         output = _show_arguments('so_arm_control', 'teleop.launch.py')
-        assert 'No arguments.' in output
+        for arg in self.EXPECTED_ARGS:
+            assert arg in output, f"Expected argument '{arg}' not in teleop.launch.py"

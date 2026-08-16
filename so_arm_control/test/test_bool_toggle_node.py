@@ -18,6 +18,8 @@ from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import DurabilityPolicy, LivelinessPolicy, QoSProfile, ReliabilityPolicy
 from so_arm_control.bool_toggle_node import BoolToggle
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
+from std_msgs.msg import Bool
 from std_srvs.srv import SetBool, Trigger
 
 STATE_SERVICE_QOS = QoSProfile(
@@ -152,6 +154,71 @@ class TestBoolToggleExternalSync:
             while toggle._active is not True and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert toggle._active is True
+        finally:
+            executor.shutdown()
+            target_node.destroy_node()
+            thread.join(timeout=2.0)
+
+
+class TestBoolToggleStatusTopic:
+    """status_topic set: subscribes instead of introspecting target_service."""
+
+    def test_active_state_syncs_from_status_topic(self, spinning_graph):
+        owner, client_node = spinning_graph
+        toggle = BoolToggle(
+            owner, 'test', '/trigger_st', '/target_st', initial_state=False,
+            status_topic='/target_st_active',
+        )
+        pub = client_node.create_publisher(Bool, '/target_st_active', LATCHED_BOOL_QOS)
+        pub.publish(Bool(data=True))
+
+        deadline = time.monotonic() + 5.0
+        while toggle._active is not True and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert toggle._active is True
+
+
+class TestBoolTogglePublishStatusTopic:
+    """publish_status_topic set: republishes _active from the introspection callback."""
+
+    def test_republishes_on_introspected_change(self, spinning_graph):
+        owner, client_node = spinning_graph
+        target_node = rclpy.create_node('test_bool_toggle_publish_target')
+
+        def _on_target_call(request, response):
+            response.success = True
+            response.message = 'ok'
+            return response
+
+        srv = target_node.create_service(SetBool, '/hw_target', _on_target_call)
+        srv.configure_introspection(
+            target_node.get_clock(), STATE_SERVICE_QOS, ServiceIntrospectionState.CONTENTS,
+        )
+        executor = MultiThreadedExecutor(num_threads=2)
+        executor.add_node(target_node)
+        thread = threading.Thread(target=executor.spin, daemon=True)
+        thread.start()
+        received = []
+        try:
+            BoolToggle(
+                owner, 'test', '/trigger_pub', '/hw_target', initial_state=False,
+                publish_status_topic='/hw_target_active',
+            )
+            client_node.create_subscription(
+                Bool, '/hw_target_active', lambda msg: received.append(msg.data),
+                LATCHED_BOOL_QOS,
+            )
+            outsider = client_node.create_client(SetBool, '/hw_target')
+            assert outsider.wait_for_service(timeout_sec=5.0)
+            req = SetBool.Request()
+            req.data = True
+            future = outsider.call_async(req)
+            _wait(future, timeout=5.0)
+
+            deadline = time.monotonic() + 5.0
+            while True not in received and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert True in received
         finally:
             executor.shutdown()
             target_node.destroy_node()

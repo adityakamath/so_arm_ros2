@@ -9,49 +9,28 @@ from so_arm_control.so_arm_utils.kinematics import _PinocchioIK, KinematicLimite
 
 from geometry_msgs.msg import TransformStamped, TwistStamped
 import rclpy
-from rclpy.duration import Duration
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import (
-    DurabilityPolicy,
-    LivelinessPolicy,
-    QoSDurabilityPolicy,
-    QoSHistoryPolicy,
-    QoSProfile,
-    QoSReliabilityPolicy,
-    ReliabilityPolicy,
-)
 from sensor_msgs.msg import JointState
-from service_msgs.msg import ServiceEventInfo
-from std_msgs.msg import String
-from std_srvs.srv import SetBool_Event
+from so_arm_control.so_arm_utils.params import require_parameter
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, REALTIME_QOS, ROBOT_DESCRIPTION_QOS
+from so_arm_control.so_arm_utils.spin import spin_and_shutdown
+from std_msgs.msg import Bool, String
 import tf2_ros
-from visualization_msgs.msg import Marker
-
-# Transient local + reliable so a late-joining subscriber replays the last service call.
-STATE_SERVICE_QOS = QoSProfile(
-    depth=2,
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-    liveliness=LivelinessPolicy.AUTOMATIC,
-    liveliness_lease_duration=Duration(seconds=1),
-)
 
 
-class IkTeleopNode(Node):
+class TeleopIkNode(Node):
     """Integrate a joystick twist into a target pose, visualize it, and IK-drive the arm there."""
 
-    def __init__(self):
-        super().__init__('ik_teleop_node')
+    def __init__(self, parameter_overrides: list | None = None):
+        super().__init__('teleop_ik_node', parameter_overrides=parameter_overrides)
 
         self.declare_parameter('twist_topic', 'target_teleop')
         self.declare_parameter('default_parent_frame', 'base_footprint')
         self.declare_parameter('target_frame', 'ik_target')
-        self.declare_parameter('marker_topic', 'ik_target_marker')
         self.declare_parameter('output_topic', 'ik_joint_states')
-        self.declare_parameter('robot_description_topic', '/robot_description')
-        self.declare_parameter('joint_states_topic', '/joint_states')
+        self.declare_parameter('robot_description_topic', 'robot_description')
+        self.declare_parameter('joint_states_topic', 'joint_states')
         self.declare_parameter('start_x', 0.2)
         self.declare_parameter('start_y', 0.0)
         self.declare_parameter('start_z', 0.2)
@@ -69,15 +48,19 @@ class IkTeleopNode(Node):
         self.declare_parameter('max_acceleration', 40.0)
         # meters - caps the joystick target's distance from base; 0.0 disables the clamp.
         self.declare_parameter('max_target_reach', 0.0)
-        # SetBool service whose state gates target tracking during e-stop.
-        self.declare_parameter('estop_service', '/emergency_stop')
+        # emergency_stop_active gates target tracking during e-stop, and joint_state_switch_node's
+        # own broadcast of which input currently wins - shadow FK position instead of
+        # solving/publishing whenever either says ik isn't the one actually driving the arm,
+        # so handover back to ik never has a stale target to snap to.
+        self.declare_parameter('estop_status_topic', 'emergency_stop_active')
+        self.declare_parameter('active_input_topic', 'active_joint_input')
+        self.declare_parameter('own_input_name', 'ik')
 
         twist_topic = self.get_parameter('twist_topic').value
         self._default_parent_frame = self.get_parameter('default_parent_frame').value
         # Overwritten by the first TwistStamped's own header.frame_id.
         self._parent_frame = self._default_parent_frame
         self._target_frame = self.get_parameter('target_frame').value
-        marker_topic = self.get_parameter('marker_topic').value
         output_topic = self.get_parameter('output_topic').value
         robot_description_topic = self.get_parameter('robot_description_topic').value
         joint_states_topic = self.get_parameter('joint_states_topic').value
@@ -97,15 +80,7 @@ class IkTeleopNode(Node):
         orientation_param = self.get_parameter('default_orientation').value
         self._default_orientation = tuple(float(v) for v in orientation_param)
         self._target_roll = self._default_orientation[0]
-        self._end_effector_link = self.get_parameter_or(
-            'end_effector_link', Parameter('end_effector_link', Parameter.Type.STRING, '')
-        ).value
-        if not self._end_effector_link:
-            raise RuntimeError(
-                "Required parameter 'end_effector_link' is empty or unset - pass it via a "
-                'parameters yaml (e.g. so_arm_control/config/teleop.yaml) or '
-                '-p end_effector_link:="..." on the command line.'
-            )
+        self._end_effector_link = require_parameter(self, 'end_effector_link')
 
         self._ik: _PinocchioIK | None = None
         # meters, the ik_target's own clamp; set once _ik is built.
@@ -113,35 +88,29 @@ class IkTeleopNode(Node):
         self._seeded_from_fk = False
         self._frame_warned = False
         self._estop_active = False
-        self._estop_pending: dict = {}
+        self._own_input_name = self.get_parameter('own_input_name').value
+        self._active_input = self._own_input_name  # assume active until the first broadcast
         max_acceleration = float(self.get_parameter('max_acceleration').value)
         self._limiter = KinematicLimiter(self._joint_names, publish_rate, max_acceleration)
 
-        realtime_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
-        )
-        self.create_subscription(TwistStamped, twist_topic, self._on_twist, realtime_qos)
-        self._marker_pub = self.create_publisher(Marker, marker_topic, 10)
+        self.create_subscription(TwistStamped, twist_topic, self._on_twist, REALTIME_QOS)
         self._joint_pub = self.create_publisher(JointState, output_topic, 10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
-        robot_description_qos = QoSProfile(
-            depth=1,
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        self.create_subscription(
+            String, robot_description_topic, self._on_robot_description, ROBOT_DESCRIPTION_QOS,
         )
         self.create_subscription(
-            String, robot_description_topic, self._on_robot_description, robot_description_qos,
+            JointState, joint_states_topic, self._on_joint_states, REALTIME_QOS,
         )
+        estop_status_topic = self.get_parameter('estop_status_topic').value
         self.create_subscription(
-            JointState, joint_states_topic, self._on_joint_states, realtime_qos,
+            Bool, estop_status_topic, lambda msg: setattr(self, '_estop_active', msg.data),
+            LATCHED_BOOL_QOS,
         )
-        estop_service = self.get_parameter('estop_service').value
+        active_input_topic = self.get_parameter('active_input_topic').value
         self.create_subscription(
-            SetBool_Event, f'{estop_service}/_service_event', self._on_estop_event,
-            STATE_SERVICE_QOS,
+            String, active_input_topic, self._on_active_input, LATCHED_BOOL_QOS,
         )
         self._seed_timeout_timer = self.create_timer(5.0, self._on_seed_timeout)
 
@@ -211,23 +180,8 @@ class IkTeleopNode(Node):
             f"Seeded target start from '{self._end_effector_link}': {self._position}"
         )
 
-    def _on_estop_event(self, msg: SetBool_Event) -> None:
-        # Correlate request/response by (client_gid, sequence_number) to read the call's value.
-        key = (bytes(msg.info.client_gid), msg.info.sequence_number)
-
-        if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
-            if msg.request:
-                self._estop_pending[key] = msg.request[0].data
-            if len(self._estop_pending) > 16:  # defensive cap, shouldn't normally fill
-                self._estop_pending.pop(next(iter(self._estop_pending)), None)
-            return
-
-        if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
-            if key not in self._estop_pending or not msg.response:
-                return
-            value = self._estop_pending.pop(key)
-            if msg.response[0].success:
-                self._estop_active = value
+    def _on_active_input(self, msg: String) -> None:
+        self._active_input = msg.data
 
     def _on_seed_timeout(self) -> None:
         if not self._seeded_from_fk:
@@ -277,24 +231,6 @@ class IkTeleopNode(Node):
         transform.transform.rotation.w = 1.0
         self._tf_broadcaster.sendTransform(transform)
 
-        marker = Marker()
-        marker.header.stamp = stamp
-        marker.header.frame_id = self._parent_frame
-        marker.ns = 'ik_target'
-        marker.id = 0
-        marker.type = Marker.SPHERE
-        marker.action = Marker.ADD
-        marker.pose.position.x = self._position[0]
-        marker.pose.position.y = self._position[1]
-        marker.pose.position.z = self._position[2]
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = marker.scale.y = marker.scale.z = 0.02
-        marker.color.r = 1.0
-        marker.color.g = 0.2
-        marker.color.b = 0.8
-        marker.color.a = 0.9
-        self._marker_pub.publish(marker)
-
         if self._ik is None:
             return
         if not self._frame_warned and self._parent_frame != self._default_parent_frame:
@@ -307,9 +243,9 @@ class IkTeleopNode(Node):
 
         current = self._limiter.current_state()
 
-        if self._estop_active:
-            # Torque is off - track the arm instead of driving it, so releasing e-stop holds
-            # in place instead of snapping back to a stale pre-e-stop target.
+        if self._estop_active or self._active_input != self._own_input_name:
+            # Not the active joint_state_switch_node input (or torque's off) - track the arm
+            # instead of driving it, so handing control back to ik never snaps to a stale target.
             if current is not None:
                 position = self._ik.fk_position(current)
                 if position is not None:
@@ -338,16 +274,8 @@ class IkTeleopNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = IkTeleopNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        print('Received keyboard interrupt!')
-    except ExternalShutdownException:
-        print('Received external shutdown request!')
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+    node = TeleopIkNode()
+    spin_and_shutdown(node)
 
 
 if __name__ == '__main__':

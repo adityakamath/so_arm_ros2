@@ -1,9 +1,9 @@
-joy_teleop:
+/**/joy_teleop:
   ros__parameters:
     teleop:
       type: topic
       interface_type: geometry_msgs/msg/TwistStamped
-      topic_name: /target_teleop
+      topic_name: target_teleop
       deadman_buttons: [9]  # L1
       axis_mappings:
         twist-linear-x:
@@ -25,12 +25,12 @@ joy_teleop:
         header-frame_id:
           value: 'base_footprint'  # verified URDF root, not base_link
 
-    # Raw -1..1 passthrough - gripper_teleop_node remaps per-model, and also picks up gripper
+    # Raw -1..1 passthrough - teleop_gripper_node remaps per-model, and also picks up gripper
     # position from /joint_commands when GUI sliders are the active joint_state_switch input.
     gripper_teleop:
       type: topic
       interface_type: std_msgs/msg/Float64
-      topic_name: /gripper_teleop
+      topic_name: gripper_teleop
       deadman_buttons: [9]  # L1, same deadman as Cartesian teleop
       axis_mappings:
         data:
@@ -42,88 +42,96 @@ joy_teleop:
     estop_toggle:
       type: service
       interface_type: std_srvs/srv/Trigger
-      service_name: /emergency_stop_toggle
+      service_name: emergency_stop_toggle
       buttons: [1]  # B
 
     joint_state_switch_toggle:
       type: service
       interface_type: std_srvs/srv/Trigger
-      service_name: /joint_state_switch_toggle
+      service_name: joint_state_switch_toggle
       buttons: [2]  # X
 
-    # waypoint_follow_node's services
-    record_waypoint:
-      type: service
-      interface_type: std_srvs/srv/SetBool
-      service_name: /record_waypoint
-      service_request:
-        data: true
-      buttons: [3]  # Y
-
-    waypoint_follow_toggle:
+    # record_replay_node's record/replay, via bool_toggle_node's Trigger wrappers below.
+    record_toggle:
       type: service
       interface_type: std_srvs/srv/Trigger
-      service_name: /waypoint_follow_toggle
+      service_name: record_toggle
+      buttons: [3]  # Y
+
+    replay_toggle:
+      type: service
+      interface_type: std_srvs/srv/Trigger
+      service_name: replay_toggle
       buttons: [0]  # A
 
-    reset_waypoints:
-      type: service
-      interface_type: std_srvs/srv/SetBool
-      service_name: /reset_waypoints
-      service_request:
-        data: true
-      buttons: [11]  # settings
-
-bool_toggle_node:
+/**/bool_toggle_node:
   ros__parameters:
-    toggles: ["emergency_stop", "joint_state_switch", "waypoint_follow"]
+    toggles: ["emergency_stop", "joint_state_switch", "record", "replay"]
     emergency_stop:
-      trigger_service: /emergency_stop_toggle
-      target_service: /emergency_stop
+      trigger_service: emergency_stop_toggle
+      target_service: emergency_stop  # served by sts_hardware_interface, outside so_arm_control
       initial_state: false
+      # No owned status topic to subscribe to - introspect it directly and republish, the one
+      # remaining use of service_event.py's introspection machinery.
+      publish_status_topic: emergency_stop_active
     joint_state_switch:
-      trigger_service: /joint_state_switch_toggle
-      target_service: /joint_state_switch
+      trigger_service: joint_state_switch_toggle
+      target_service: joint_state_switch
       initial_state: false
-    waypoint_follow:
-      trigger_service: /waypoint_follow_toggle
-      target_service: /waypoint_follow
+      status_topic: joint_state_switch_active  # published by joint_state_switch_node
+    record:
+      trigger_service: record_toggle
+      target_service: record  # record_replay_node's own SetBool service
       initial_state: false
+      status_topic: record_active  # published by record_replay_node
+    replay:
+      trigger_service: replay_toggle
+      target_service: replay  # record_replay_node's own SetBool service
+      initial_state: false
+      status_topic: replay_active  # published by record_replay_node
 
-joint_state_switch_node:
+/**/record_replay_node:
   ros__parameters:
-    output_topic: /joint_commands  # joint_trajectory_bridge's input
+    recordings_dir: src://so_arm_ros2/so_arm_control/recordings  # resolved via ament_index
+    joint_states_topic: joint_states
+    dynamic_joint_states_topic: dynamic_joint_states
+    tf_topic: tf
+    estop_status_topic: emergency_stop_active
+    output_topic: joint_commands_replay  # joint_state_switch_node's 'replay' input, below
+    joint_names:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+    publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
+    replay_loops: 1  # 0 = loop forever, N>0 = exactly N total passes
+    gripper_joint: gripper_joint
+    gripper_action_name: gripper_controller/gripper_cmd
+
+/**/joint_state_switch_node:
+  ros__parameters:
+    output_topic: joint_commands  # joint_trajectory_bridge's input
+    publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
     # priority order, first = highest; ik is the fallback. replay is highest so it locks out
     # teleop while active - pausing/finishing/e-stop all flip /replay false, handing control back.
-    inputs: ["replay", "patrol", "gui", "ik"]
-    replay.topic: /joint_commands_replay
-    replay.observe_service: /replay  # owned by record_replay_node, in control.launch.py
-    patrol.topic: /joint_commands_patrol
-    patrol.observe_service: /waypoint_follow  # mirrors waypoint_follow_node's own service
-    gui.topic: /joint_commands_gui
-    gui.own_service: /joint_state_switch
-    ik.topic: /joint_commands_ik
+    inputs: ["replay", "gui", "ik"]
+    replay.topic: joint_commands_replay
+    replay.status_topic: replay_active  # published by record_replay_node, above
+    gui.topic: joint_commands_gui
+    gui.own_service: joint_state_switch
+    ik.topic: joint_commands_ik
 
-waypoint_follow_node:
-  ros__parameters:
-    output_topic: /joint_commands_patrol  # joint_state_switch_node's 'patrol' input
-    marker_topic: /waypoint_markers
-    frame_id: base_footprint
-    end_effector_link: end_effector_link  # same name on both so100 and so101
-    number_of_loops: 0  # 0 = loop forever, N>0 = exactly N total passes
-    max_acceleration: 40.0  # rad/s^2 - independently tunable from ik_teleop_node's own cap
-    dwell_time: 1.0  # seconds - pause at each waypoint before advancing to the next leg
-
-gripper_teleop_node:
+/**/teleop_gripper_node:
   ros__parameters:
     # rad per unit of normalized load - compliant setpoint-shaping, disabled by default. Tune
     # empirically (sign included) starting from 0 if enabling - see README's Gripper Compliance.
     effort_gain: 0.0
 
-ik_teleop_node:
+/**/teleop_ik_node:
   ros__parameters:
-    twist_topic: /target_teleop  # joy_teleop's own output, see "teleop" above
-    output_topic: /joint_commands_ik  # joint_state_switch_node's default input
+    twist_topic: target_teleop  # joy_teleop's own output, see "teleop" above
+    output_topic: joint_commands_ik  # joint_state_switch_node's default input
     end_effector_link: end_effector_link  # same name on both so100 and so101
     # roll, pitch, yaw (rad) - roll is just the starting value, driven live by twist-angular-x.
     default_orientation: [0.0, 0.0, 0.0]
@@ -131,3 +139,40 @@ ik_teleop_node:
     max_acceleration: 400.0  # rad/s^2 - caps velocity change tick to tick, see _kinematic_limit
     # meters - caps ik_target distance from base; 0 disables.
     max_target_reach: 0.45
+
+/**/target_visualizer_node:
+  ros__parameters:
+    target_frame: ik_target
+    parent_frame: base_footprint
+    marker_topic: ik_target_marker
+    publish_rate: 30.0
+    marker_scale: 0.02
+    default_color: [1.0, 0.2, 0.8, 0.9]  # pink - teleop_ik_node's old hardcoded color, now the idle one
+
+    # Priority order, first listed = highest. Each mode watches a latched Bool status topic,
+    # plus a color. First active mode wins; none active falls back to default_color (also
+    # covers the startup-transient window before joint_state_switch's first call resolves
+    # slider vs. ik_teleop either way).
+    # record outranks estop: you can still be recording while e-stop is pressed, and that state
+    # is the more important one to see on the marker.
+    modes: ["record", "estop", "replay", "slider", "ik_teleop"]
+
+    record.status_topic: record_active
+    record.active_value: true
+    record.color: [1.0, 0.5, 0.0, 0.9]  # orange
+
+    estop.status_topic: emergency_stop_active
+    estop.active_value: true
+    estop.color: [1.0, 0.0, 0.0, 0.9]  # red
+
+    replay.status_topic: replay_active
+    replay.active_value: true
+    replay.color: [0.0, 0.8, 1.0, 0.9]  # cyan
+
+    slider.status_topic: joint_state_switch_active
+    slider.active_value: true
+    slider.color: [0.8, 0.8, 0.0, 0.9]  # yellow
+
+    ik_teleop.status_topic: joint_state_switch_active
+    ik_teleop.active_value: false
+    ik_teleop.color: [0.0, 1.0, 0.4, 0.9]  # spring green

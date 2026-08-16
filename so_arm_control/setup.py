@@ -26,10 +26,10 @@ setup(
         'console_scripts': [
             'joint_trajectory_bridge = so_arm_control.joint_trajectory_bridge_node:main',
             'bool_toggle_node = so_arm_control.bool_toggle_node:main',
-            'gripper_teleop_node = so_arm_control.gripper_teleop_node:main',
-            'ik_teleop_node = so_arm_control.ik_teleop_node:main',
+            'teleop_gripper_node = so_arm_control.teleop_gripper_node:main',
+            'teleop_ik_node = so_arm_control.teleop_ik_node:main',
+            'target_visualizer_node = so_arm_control.target_visualizer_node:main',
             'joint_state_switch_node = so_arm_control.joint_state_switch_node:main',
-            'waypoint_follow_node = so_arm_control.waypoint_follow_node:main',
             'record_replay_node = so_arm_control.record_replay_node:main',
             'generate_srdf = so_arm_control.scripts.generate_srdf:main',
         ],

@@ -6,35 +6,16 @@ import xml.etree.ElementTree as ElementTree
 # Must be the first non-stdlib import: runs so_arm_utils.kinematics' numpy-ABI sys.path fix
 # before rclpy/sensor_msgs transitively import the wrong numpy.
 from so_arm_control.so_arm_utils.kinematics import KinematicLimiter
+from so_arm_control.so_arm_utils.urdf import parse_joint_velocity_and_limits
 
 from control_msgs.action import ParallelGripperCommand
 import rclpy
 from rclpy.action import ActionClient
-from rclpy.duration import Duration
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import (
-    DurabilityPolicy,
-    LivelinessPolicy,
-    QoSDurabilityPolicy,
-    QoSHistoryPolicy,
-    QoSProfile,
-    QoSReliabilityPolicy,
-    ReliabilityPolicy,
-)
 from sensor_msgs.msg import JointState
-from service_msgs.msg import ServiceEventInfo
-from std_msgs.msg import Float64, String
-from std_srvs.srv import SetBool_Event
-
-# Transient local + reliable so a late-joining subscriber replays the last service call.
-STATE_SERVICE_QOS = QoSProfile(
-    depth=2,
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-    liveliness=LivelinessPolicy.AUTOMATIC,
-    liveliness_lease_duration=Duration(seconds=1),
-)
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, REALTIME_QOS, ROBOT_DESCRIPTION_QOS
+from so_arm_control.so_arm_utils.spin import spin_and_shutdown
+from std_msgs.msg import Bool, Float64, String
 
 
 def _remap(raw: float, lo: float, hi: float) -> float:
@@ -43,21 +24,22 @@ def _remap(raw: float, lo: float, hi: float) -> float:
     return raw * scale + offset
 
 
-class GripperTeleopNode(Node):
+class TeleopGripperNode(Node):
     """Drive gripper_joint from joystick or GUI, gated on the arm's own GUI/joystick mode."""
 
-    def __init__(self):
-        super().__init__('gripper_teleop_node')
+    def __init__(self, parameter_overrides: list | None = None):
+        super().__init__('teleop_gripper_node', parameter_overrides=parameter_overrides)
 
         self.declare_parameter('gripper_teleop_topic', 'gripper_teleop')
         self.declare_parameter('joint_commands_topic', 'joint_commands')
-        self.declare_parameter('robot_description_topic', '/robot_description')
-        self.declare_parameter('joint_states_topic', '/joint_states')
-        # SetBool service whose state selects GUI vs. joystick control.
-        self.declare_parameter('gui_switch_service', '/joint_state_switch')
+        self.declare_parameter('robot_description_topic', 'robot_description')
+        self.declare_parameter('joint_states_topic', 'joint_states')
+        # Latched Bool (published by joint_state_switch_node's 'gui' input) selecting GUI vs.
+        # joystick control.
+        self.declare_parameter('gui_switch_status_topic', 'joint_state_switch_active')
         self.declare_parameter('gripper_joint', 'gripper_joint')
         self.declare_parameter('action_name', 'gripper_controller/gripper_cmd')
-        # Hz - matches ik_teleop_node/waypoint_follow_node's own publish_rate.
+        # Hz - matches teleop_ik_node's own publish_rate.
         self.declare_parameter('send_rate', 30.0)
         # rad - matches gripper_controller's goal_tolerance
         self.declare_parameter('epsilon', 0.01)
@@ -71,7 +53,7 @@ class GripperTeleopNode(Node):
         joint_commands_topic = self.get_parameter('joint_commands_topic').value
         robot_description_topic = self.get_parameter('robot_description_topic').value
         joint_states_topic = self.get_parameter('joint_states_topic').value
-        gui_switch_service = self.get_parameter('gui_switch_service').value
+        gui_switch_status_topic = self.get_parameter('gui_switch_status_topic').value
         self._gripper_joint = self.get_parameter('gripper_joint').value
         action_name = self.get_parameter('action_name').value
         send_rate = float(self.get_parameter('send_rate').value)
@@ -84,36 +66,25 @@ class GripperTeleopNode(Node):
         # Absolute gripper target while GUI control is active.
         self._gui_position: float | None = None
         self._gui_active = False  # default: joystick controls until a switch event says otherwise
-        self._gui_switch_pending: dict = {}
         self._current_effort: float | None = None
         self._last_sent: float | None = None
         self._limiter = KinematicLimiter([self._gripper_joint], send_rate, max_acceleration)
 
-        realtime_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
+        self.create_subscription(
+            Float64, gripper_teleop_topic, self._on_gripper_teleop, REALTIME_QOS,
         )
         self.create_subscription(
-            Float64, gripper_teleop_topic, self._on_gripper_teleop, realtime_qos,
+            JointState, joint_commands_topic, self._on_joint_commands, REALTIME_QOS,
         )
         self.create_subscription(
-            JointState, joint_commands_topic, self._on_joint_commands, realtime_qos,
+            JointState, joint_states_topic, self._on_joint_states, REALTIME_QOS,
         )
         self.create_subscription(
-            JointState, joint_states_topic, self._on_joint_states, realtime_qos,
-        )
-        robot_description_qos = QoSProfile(
-            depth=1,
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            String, robot_description_topic, self._on_robot_description, ROBOT_DESCRIPTION_QOS,
         )
         self.create_subscription(
-            String, robot_description_topic, self._on_robot_description, robot_description_qos,
-        )
-        self.create_subscription(
-            SetBool_Event, f'{gui_switch_service}/_service_event', self._on_gui_switch_event,
-            STATE_SERVICE_QOS,
+            Bool, gui_switch_status_topic, lambda msg: self._on_gui_switch_change(msg.data),
+            LATCHED_BOOL_QOS,
         )
 
         self._client = ActionClient(self, ParallelGripperCommand, action_name)
@@ -126,18 +97,15 @@ class GripperTeleopNode(Node):
 
     def _on_robot_description(self, msg: String) -> None:
         try:
-            root = ElementTree.fromstring(msg.data)
+            _max_velocity, limits = parse_joint_velocity_and_limits(
+                msg.data, joint_names=[self._gripper_joint],
+            )
         except ElementTree.ParseError as exc:
             self.get_logger().error(f'Failed to parse robot_description as XML: {exc}')
             return
-        for joint_elem in root.findall('joint'):
-            if joint_elem.get('name') != self._gripper_joint:
-                continue
-            limit_elem = joint_elem.find('limit')
-            if limit_elem is not None and limit_elem.get('lower') is not None:
-                self._limit = (float(limit_elem.get('lower')), float(limit_elem.get('upper')))
-                self.get_logger().info(f"'{self._gripper_joint}' limit: {self._limit}")
-            break
+        if self._gripper_joint in limits:
+            self._limit = limits[self._gripper_joint]
+            self.get_logger().info(f"'{self._gripper_joint}' limit: {self._limit}")
         missing = self._limiter.load_max_velocity(msg.data)
         if missing:
             self.get_logger().warning(
@@ -157,23 +125,8 @@ class GripperTeleopNode(Node):
             return
         self._gui_position = msg.position[msg.name.index(self._gripper_joint)]
 
-    def _on_gui_switch_event(self, msg: SetBool_Event) -> None:
-        # Correlate request/response by (client_gid, sequence_number) to read the call's value.
-        key = (bytes(msg.info.client_gid), msg.info.sequence_number)
-
-        if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
-            if msg.request:
-                self._gui_switch_pending[key] = msg.request[0].data
-            if len(self._gui_switch_pending) > 16:  # defensive cap, shouldn't normally fill
-                self._gui_switch_pending.pop(next(iter(self._gui_switch_pending)), None)
-            return
-
-        if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
-            if key not in self._gui_switch_pending or not msg.response:
-                return
-            value = self._gui_switch_pending.pop(key)
-            if msg.response[0].success:
-                self._gui_active = value
+    def _on_gui_switch_change(self, value: bool) -> None:
+        self._gui_active = value
 
     def _on_joint_states(self, msg: JointState) -> None:
         self._limiter.on_joint_states(msg)
@@ -226,16 +179,8 @@ class GripperTeleopNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = GripperTeleopNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        print('Received keyboard interrupt!')
-    except ExternalShutdownException:
-        print('Received external shutdown request!')
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+    node = TeleopGripperNode()
+    spin_and_shutdown(node)
 
 
 if __name__ == '__main__':

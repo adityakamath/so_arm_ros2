@@ -2,18 +2,16 @@
 """
 launch_testing integration test for control.launch.py.
 
-Uses use_mock_components:=true (ros2_control's built-in mock_components/GenericSystem) so
-this runs on any machine/CI without building sts_hardware_interface, a real serial port, or
-real servos.
+Uses use_mock:=true (sts_hardware_interface's own enable_mock_mode) against the default
+ros2_control_hardware_type:=real, so this exercises the actual hardware plugin without a
+real serial port or real servos. Requires sts_hardware_interface to be built.
 
 Exercises the real end-to-end path a user actually runs: robot_state_publisher ->
-controller_manager (mock) -> joint_state_broadcaster/so_arm_controller/gripper_controller ->
+controller_manager -> joint_state_broadcaster/so_arm_controller/gripper_controller ->
 joint_trajectory_bridge, including the self-collision checker built from the real URDF/meshes.
 """
 
 import itertools
-import os
-import tempfile
 import time
 import unittest
 
@@ -29,12 +27,7 @@ import rclpy
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
-from std_srvs.srv import SetBool
 from trajectory_msgs.msg import JointTrajectory
-
-# recording_node would otherwise write into the real so_arm_ros2/recordings/ - keep test runs
-# out of it.
-_TEST_RECORDINGS_DIR = tempfile.mkdtemp(prefix='so_arm_control_test_recordings_')
 
 _JOINT_NAMES = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_flex_joint',
@@ -60,8 +53,7 @@ def generate_test_description():
     control = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(control_launch),
         launch_arguments={
-            'model': 'so101', 'use_mock_components': 'true', 'self_collision_check': 'true',
-            'recordings_dir': _TEST_RECORDINGS_DIR,
+            'model': 'so101', 'use_mock': 'true',
         }.items(),
     )
     return launch.LaunchDescription([
@@ -147,48 +139,6 @@ class TestControlStackComesUp(unittest.TestCase):
             time.sleep(0.5)
         self.assertTrue(expected <= active, f'not all controllers active: {active}')
 
-    def test_record_service_available(self):
-        client = self._node.create_client(SetBool, '/record')
-        self.assertTrue(client.wait_for_service(timeout_sec=30.0), '/record never available')
-
-    def test_replay_service_available(self):
-        client = self._node.create_client(SetBool, '/replay')
-        self.assertTrue(client.wait_for_service(timeout_sec=30.0), '/replay never available')
-
-
-class TestRecordingIntegration(unittest.TestCase):
-    """Round-trips /record against the real filesystem, in an isolated temp recordings_dir."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls._node = _make_node()
-        cls._client = cls._node.create_client(SetBool, '/record')
-        assert cls._client.wait_for_service(timeout_sec=30.0), '/record never available'
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._node.destroy_node()
-
-    def _call(self, data):
-        future = self._client.call_async(SetBool.Request(data=data))
-        rclpy.spin_until_future_complete(self._node, future, timeout_sec=10.0)
-        return future.result()
-
-    def test_start_stop_writes_a_bag(self):
-        start = self._call(True)
-        self.assertTrue(start is not None and start.success, getattr(start, 'message', None))
-        # Let a few /joint_states ticks land before stopping, so the bag isn't empty.
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline:
-            rclpy.spin_once(self._node, timeout_sec=0.2)
-        stop = self._call(False)
-        self.assertTrue(stop is not None and stop.success, getattr(stop, 'message', None))
-
-        recordings = os.listdir(_TEST_RECORDINGS_DIR)
-        self.assertEqual(len(recordings), 1, f'expected one recording, found {recordings}')
-        bag_dir = os.path.join(_TEST_RECORDINGS_DIR, recordings[0])
-        self.assertTrue(os.path.isfile(os.path.join(bag_dir, 'metadata.yaml')))
-
 
 class TestJointTrajectoryBridgeIntegration(unittest.TestCase):
     """Runs after TestControlStackComesUp (unittest file order); still waits defensively."""
@@ -242,4 +192,11 @@ class TestJointTrajectoryBridgeIntegration(unittest.TestCase):
 class TestProcessExit(unittest.TestCase):
 
     def test_exit_codes(self, proc_info):
-        launch_testing.asserts.assertExitCodes(proc_info)
+        # control.launch.py is control-only now (no teleop.launch.py, no joy_teleop) - see
+        # so_arm_bringup's test_so_arm_launch.py for the composed-stack exit-code test that
+        # tolerates joy_teleop's own quirks.
+        for info in proc_info:
+            self.assertIn(
+                info.returncode, [0, -2],
+                f'Proc {info.process_name} exited with code {info.returncode}',
+            )

@@ -41,5 +41,7 @@ dist/
 # Test results
 test_results/
 
-# so_arm record & replay: local rosbag2/mcap recordings, never pushed
-/recordings/
+# so_arm record & replay: local rosbag2/mcap recordings, never pushed (folder itself is
+# tracked via so_arm_control/recordings/.gitkeep)
+so_arm_control/recordings/*
+!so_arm_control/recordings/.gitkeep

@@ -1,42 +1,52 @@
 #!/usr/bin/env python3
 """
-Node-level unit tests for ik_teleop_node.IkTeleopNode's pure-logic pieces.
+Node-level unit tests for teleop_ik_node.TeleopIkNode's pure-logic pieces.
 
-Reach clamping, twist integration, and e-stop event correlation (the mechanism behind
-_estop_active gating - see the module docstring's "releasing e-stop holds in place"
-behavior).
+Reach clamping and twist integration, plus one real-construction smoke test
+(TestRealConstruction) that exercises the actual __init__ via its parameter_overrides
+passthrough - the class of test that would catch a bug like joint_state_switch_node's own
+once-undefined _own_switch_cb/_on_observed_event, which the __new__()-double below can't see.
 
-IkTeleopNode requires 'end_effector_link' with no default, so - like the other required-
-parameter nodes in this suite - it's built via __new__()/Node.__init__() directly rather than
-its own parameter-declaring constructor.
+For the pure-logic tests below, TeleopIkNode requires 'end_effector_link' with no default;
+rather than pay a full real construction for every test case, it's built via
+__new__()/Node.__init__() directly.
 """
 
 import itertools
 
-# Must be this file's first non-stdlib import - ik_teleop_node transitively imports
+# Must be this file's first non-stdlib import - teleop_ik_node transitively imports
 # so_arm_utils.kinematics, which needs pinocchio's numpy 1.x ABI; geometry_msgs.msg (below)
 # already pulls in the wrong (user-site, numpy 2.x) one if imported first. See conftest.py.
-from so_arm_control.ik_teleop_node import IkTeleopNode
+from so_arm_control.teleop_ik_node import TeleopIkNode
 
 from geometry_msgs.msg import TwistStamped
 import pytest
 from rclpy.duration import Duration
 from rclpy.node import Node as RclpyNode
-from service_msgs.msg import ServiceEventInfo
-from std_srvs.srv import SetBool, SetBool_Event
+from rclpy.parameter import Parameter
 
 _name_counter = itertools.count()
 
 
+class TestRealConstruction:
+
+    def test_constructs_without_error(self):
+        node = TeleopIkNode(parameter_overrides=[
+            Parameter('end_effector_link', Parameter.Type.STRING, 'end_effector_link'),
+        ])
+        node.destroy_node()
+
+
 def _make_node():
-    node = IkTeleopNode.__new__(IkTeleopNode)
-    RclpyNode.__init__(node, f'test_ik_teleop_{next(_name_counter)}')
+    node = TeleopIkNode.__new__(TeleopIkNode)
+    RclpyNode.__init__(node, f'test_teleop_ik_{next(_name_counter)}')
     node._position = [0.2, 0.0, 0.2]
     node._target_roll = 0.0
     node._target_max_reach = None
     node._last_twist_time = None
     node._estop_active = False
-    node._estop_pending = {}
+    node._own_input_name = 'ik'
+    node._active_input = 'ik'
     return node
 
 
@@ -110,51 +120,3 @@ class TestOnTwistIntegration:
         assert distance <= 0.45 + 1e-6
 
 
-class TestEstopEventCorrelation:
-
-    def _event(self, event_type, *, client_gid=b'\x01' * 16, seq=1, data=None, success=None):
-        msg = SetBool_Event()
-        msg.info.event_type = event_type
-        msg.info.client_gid = list(client_gid)
-        msg.info.sequence_number = seq
-        if data is not None:
-            req = SetBool.Request()
-            req.data = data
-            msg.request = [req]
-        if success is not None:
-            resp = SetBool.Response()
-            resp.success = success
-            msg.response = [resp]
-        return msg
-
-    def test_full_request_response_cycle_sets_estop_active(self, node):
-        node._on_estop_event(
-            self._event(ServiceEventInfo.REQUEST_RECEIVED, data=True),
-        )
-        assert node._estop_active is False  # not yet - only the request has arrived
-        node._on_estop_event(
-            self._event(ServiceEventInfo.RESPONSE_SENT, success=True),
-        )
-        assert node._estop_active is True
-
-    def test_failed_response_does_not_flip_state(self, node):
-        node._estop_active = False
-        node._on_estop_event(self._event(ServiceEventInfo.REQUEST_RECEIVED, data=True))
-        node._on_estop_event(self._event(ServiceEventInfo.RESPONSE_SENT, success=False))
-        assert node._estop_active is False
-
-    def test_response_without_matching_request_is_ignored(self, node):
-        node._estop_active = False
-        # No REQUEST_RECEIVED for this (client_gid, seq) pair was ever recorded.
-        node._on_estop_event(self._event(ServiceEventInfo.RESPONSE_SENT, success=True))
-        assert node._estop_active is False
-
-    def test_toggling_off_again(self, node):
-        node._on_estop_event(self._event(ServiceEventInfo.REQUEST_RECEIVED, data=True))
-        node._on_estop_event(self._event(ServiceEventInfo.RESPONSE_SENT, success=True))
-        assert node._estop_active is True
-        node._on_estop_event(
-            self._event(ServiceEventInfo.REQUEST_RECEIVED, seq=2, data=False),
-        )
-        node._on_estop_event(self._event(ServiceEventInfo.RESPONSE_SENT, seq=2, success=True))
-        assert node._estop_active is False

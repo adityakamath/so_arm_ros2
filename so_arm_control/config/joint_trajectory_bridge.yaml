@@ -1,9 +1,9 @@
-joint_trajectory_bridge:
+/**/joint_trajectory_bridge:
   ros__parameters:
-    input_topic: /joint_commands
-    output_topic: /so_arm_controller/joint_trajectory
-    robot_description_topic: /robot_description
-    joint_states_topic: /joint_states
+    input_topic: joint_commands
+    output_topic: so_arm_controller/joint_trajectory
+    robot_description_topic: robot_description
+    joint_states_topic: joint_states
     joint_names:
       - shoulder_pan_joint
       - shoulder_lift_joint
@@ -12,7 +12,7 @@ joint_trajectory_bridge:
       - wrist_roll_joint
     # Rare-edge-case floor only - 0.1 was silently throttling real (velocity-derived) durations.
     min_time_from_start: 0.01
-    # Protects both GUI sliders and ik_teleop_node's teleop path (both route through this bridge).
+    # Protects all paths that route through this bridge.
     enable_self_collision_check: true
     # Self-collision inflation radius in meters (10mm).
     collision_margin: 0.01

@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ElementTree
 from ament_index_python.packages import get_package_share_directory
 import numpy as np
 
+from so_arm_control.so_arm_utils.rotation import rpy_to_R
+
 try:
     import fcl
 except ImportError as exc:
@@ -22,14 +24,6 @@ except ImportError as exc:
     _STL_IMPORT_ERROR = exc
 else:
     _STL_IMPORT_ERROR = None
-
-
-def _rpy_to_R(r: float, p: float, y: float) -> np.ndarray:
-    cr, sr, cp, sp, cy, sy = np.cos(r), np.sin(r), np.cos(p), np.sin(p), np.cos(y), np.sin(y)
-    Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
-    Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
-    Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
-    return Rz @ Ry @ Rx
 
 
 def _resolve_package_uri(uri: str) -> str:
@@ -131,7 +125,7 @@ class SelfCollisionChecker:
             model.beginModel()
             all_verts = []
             for mesh_path, xyz, rpy in meshes:
-                R, t = _rpy_to_R(*rpy), np.array(xyz)
+                R, t = rpy_to_R(*rpy), np.array(xyz)
                 verts = stlmesh.Mesh.from_file(mesh_path).vectors.reshape(-1, 3) @ R.T + t
                 for i in range(0, len(verts), 3):
                     model.addTriangle(verts[i], verts[i + 1], verts[i + 2])
@@ -220,7 +214,7 @@ class SelfCollisionChecker:
             R_p, t_p = transforms[parent]
             for jname in self._children_of.get(parent, []):
                 j = self._joints[jname]
-                R_j = _rpy_to_R(*j['rpy'])
+                R_j = rpy_to_R(*j['rpy'])
                 if j['type'] in ('revolute', 'continuous'):
                     axis = np.array(j['axis'])
                     angle = joint_values.get(jname, 0.0)

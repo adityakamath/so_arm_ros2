@@ -1,0 +1,10 @@
+# Overrides for leader_follower.launch.py's leader_teleop_group teleop.launch.py include.
+# record_replay_node runs under /leader (recording from the leader), but its playback output
+# is redirected to the follower - see follower_teleop.yaml.
+record_replay_output_topic: '/follower/joint_commands_replay'
+record_replay_gripper_action_name: '/follower/gripper_controller/gripper_cmd'
+record_replay_estop_status_topic: '/follower/emergency_stop_active'  # gate replay by the arm it's driving
+# Must match control.launch.py's leader_control_overrides frame_prefix - robot_state_publisher
+# publishes TF frames under this prefix, and teleop.launch.py's IK/visualizer nodes need to
+# look up/broadcast against the same prefixed tree.
+frame_prefix: 'leader/'

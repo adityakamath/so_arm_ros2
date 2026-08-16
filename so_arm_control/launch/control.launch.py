@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""SO-ARM control stack: robot_state_publisher, controller_manager, JSB, so_arm_controller, gripper_controller, joint_trajectory_bridge."""
+"""SO-ARM control stack: robot_state_publisher, controller_manager, JSB, so_arm_controller,
+gripper_controller, joint_trajectory_bridge. Control only - see so_arm_bringup for a launch
+file that composes this with teleop.launch.py.
+"""
 
 import subprocess
 import tempfile
@@ -19,26 +22,16 @@ def launch_setup(context):
     serial_port = LaunchConfiguration('serial_port').perform(context)
     use_mock = LaunchConfiguration('use_mock').perform(context)
     use_sim_time = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
-    hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
-    use_mock_components = (
-        LaunchConfiguration('use_mock_components').perform(context).lower() in ('true', '1')
-    )
-    effective_hw_type = 'mock_components' if use_mock_components else hw_type
-    mujoco_model = LaunchConfiguration('mujoco_model').perform(context)
+    effective_hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
-    input_topic = LaunchConfiguration('input_topic').perform(context)
-    self_collision_check = LaunchConfiguration('self_collision_check').perform(context).strip()
-    recordings_dir = LaunchConfiguration('recordings_dir').perform(context).strip()
-    replay_gripper = LaunchConfiguration('replay_gripper').perform(context).strip()
+    frame_prefix = LaunchConfiguration('frame_prefix').perform(context)
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
     xacro = FindExecutable(name='xacro').perform(context)
 
     # MJCF must land on disk (mesh paths are filesystem-based), unlike robot_description below.
-    if mujoco_model:
-        final_mujoco_model = mujoco_model
-    elif effective_hw_type == 'mujoco':
+    if effective_hw_type == 'mujoco':
         mjcf_xml = subprocess.run(
             [xacro, f'{pkg_desc}/mjcf/so_arm.mjcf.xacro', f'so_arm_config:={model}'],
             capture_output=True, text=True, check=True,
@@ -72,7 +65,7 @@ def launch_setup(context):
         package='robot_state_publisher',
         executable='robot_state_publisher',
         output='log',
-        parameters=[robot_description, {'use_sim_time': use_sim_time}],
+        parameters=[robot_description, {'use_sim_time': use_sim_time, 'frame_prefix': frame_prefix}],
         name='robot_state_publisher',
         emulate_tty=True,
         arguments=['--ros-args', '--log-level', 'WARN'],
@@ -97,60 +90,51 @@ def launch_setup(context):
         output='both',
     )
 
-    control_node_actions = (
-        [mujoco_control_node] if effective_hw_type == 'mujoco' else [controller_manager]
-    )
+    control_node = mujoco_control_node if effective_hw_type == 'mujoco' else controller_manager
 
     bridge_config = f'{pkg_ctrl}/config/joint_trajectory_bridge.yaml'
-    bridge_overrides = {'input_topic': input_topic} if input_topic else {}
-    if self_collision_check:
-        bridge_overrides['enable_self_collision_check'] = (
-            self_collision_check.lower() in ('true', '1')
-        )
 
     joint_trajectory_bridge_node = Node(
         package='so_arm_control',
         executable='joint_trajectory_bridge',
         name='joint_trajectory_bridge',
         output='screen',
-        parameters=[bridge_config, bridge_overrides],
+        parameters=[bridge_config],
     )
 
-    record_replay_config = f'{pkg_ctrl}/config/record_replay.yaml'
-    record_replay_overrides = {}
-    if recordings_dir:
-        record_replay_overrides['recordings_dir'] = recordings_dir
-    if replay_gripper:
-        record_replay_overrides['replay_gripper'] = replay_gripper.lower() in ('true', '1')
-    record_replay_node = Node(
-        package='so_arm_control',
-        executable='record_replay_node',
-        name='record_replay_node',
-        output='screen',
-        parameters=[record_replay_config, record_replay_overrides],
+    joint_state_broadcaster_spawner = Node(
+        package='controller_manager', executable='spawner',
+        arguments=['joint_state_broadcaster', '-c', 'controller_manager',
+                   '--controller-manager-timeout', '30'], output='both',
     )
+    arm_gripper_spawners = [
+        Node(
+            package='controller_manager', executable='spawner',
+            arguments=['so_arm_controller', '-c', 'controller_manager',
+                       '--controller-manager-timeout', '30'], output='both',
+        ),
+        Node(
+            package='controller_manager', executable='spawner',
+            arguments=['gripper_controller', '-c', 'controller_manager',
+                       '--controller-manager-timeout', '30'], output='both',
+        ),
+    ]
+
+    # NOTE: lekiwi_control's stagger pattern (RegisterEventHandler+OnProcessStart) is NOT used
+    # here - actions fired from an event handler callback run outside the synchronous visit
+    # tree that PushRosNamespace relies on to apply namespacing, so under leader_follower's
+    # namespaced groups those spawners would silently target the wrong (unnamespaced)
+    # controller_manager. Plain TimerActions stay inside that tree and are namespace-safe.
+    controller_spawner_actions = [
+        TimerAction(period=2.0, actions=[joint_state_broadcaster_spawner]),
+        TimerAction(period=2.5, actions=arm_gripper_spawners),
+    ]
 
     return [
         robot_state_publisher_node,
-        *control_node_actions,
-        TimerAction(period=2.0, actions=[Node(
-            package='controller_manager', executable='spawner',
-            arguments=['joint_state_broadcaster', '-c', '/controller_manager',
-                       '--controller-manager-timeout', '30'], output='both',
-        )]),
-        TimerAction(period=2.5, actions=[
-            Node(
-                package='controller_manager', executable='spawner',
-                arguments=['so_arm_controller', '-c', '/controller_manager',
-                           '--controller-manager-timeout', '30'], output='both',
-            ),
-            Node(
-                package='controller_manager', executable='spawner',
-                arguments=['gripper_controller', '-c', '/controller_manager',
-                           '--controller-manager-timeout', '30'], output='both',
-            ),
-        ]),
-        TimerAction(period=3.0, actions=[joint_trajectory_bridge_node, record_replay_node]),
+        control_node,
+        *controller_spawner_actions,
+        joint_trajectory_bridge_node,
     ]
 
 
@@ -184,39 +168,17 @@ def generate_launch_description():
             choices=['real', 'mujoco'],
         ),
         DeclareLaunchArgument(
-            'use_mock_components',
-            default_value='false',
-            description='Use mock_components/GenericSystem; overrides ros2_control_hardware_type.',
-        ),
-        DeclareLaunchArgument(
-            'mujoco_model',
-            default_value='',
-            description='Pre-built MJCF path; empty = xacro-generate. mujoco only.',
-        ),
-        DeclareLaunchArgument(
             'mujoco_headless',
             default_value='false',
             description='mujoco only: suppress viewer window.',
         ),
         DeclareLaunchArgument(
-            'input_topic',
+            'frame_prefix',
             default_value='',
-            description='JointState input topic; empty uses yaml default.',
-        ),
-        DeclareLaunchArgument(
-            'self_collision_check',
-            default_value='',
-            description='Override enable_self_collision_check; empty uses yaml value.',
-        ),
-        DeclareLaunchArgument(
-            'recordings_dir',
-            default_value='',
-            description="Override record_replay_node's recordings_dir; empty uses yaml value.",
-        ),
-        DeclareLaunchArgument(
-            'replay_gripper',
-            default_value='',
-            description="Override record_replay_node's replay_gripper; empty uses yaml value.",
+            description=(
+                'Prefix for all published tf frame_ids (e.g. "leader/"); empty = no prefix, '
+                'the single-arm default.'
+            ),
         ),
     ]
 

@@ -1,95 +1,100 @@
 #!/usr/bin/env python3
-"""Record /joint_states + /dynamic_joint_states to mcap, and replay the latest one as commands."""
+"""Record /joint_states + /dynamic_joint_states + /tf to mcap, replay the latest as commands."""
 
-from datetime import datetime
-import functools
 import os
 import time
 
+from ament_index_python.packages import get_package_prefix, get_package_share_directory
 from control_msgs.action import ParallelGripperCommand
 from control_msgs.msg import DynamicJointState
 import rclpy
-from rclpy._rclpy_pybind11.service_introspection import ServiceIntrospectionState
 from rclpy.action import ActionClient
-from rclpy.duration import Duration
-from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import DurabilityPolicy, LivelinessPolicy, QoSProfile, ReliabilityPolicy
-from rclpy.serialization import deserialize_message
-import rosbag2_py
 from sensor_msgs.msg import JointState
-from service_msgs.msg import ServiceEventInfo
-from std_srvs.srv import SetBool, SetBool_Event
+from so_arm_control.so_arm_utils.bag_player import BagPlayer
+from so_arm_control.so_arm_utils.bag_recorder import BagRecorder
+from so_arm_control.so_arm_utils.params import require_parameter
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
+from so_arm_control.so_arm_utils.spin import spin_and_shutdown
+from std_msgs.msg import Bool
+from std_srvs.srv import SetBool
+from tf2_msgs.msg import TFMessage
 
-# Matches bool_toggle_node/ik_teleop_node/joint_state_switch_node/waypoint_follow_node's own
-# introspection QoS - transient local so a late-joining observer (joint_state_switch_node's
-# 'replay' input, in particular) learns the current state on connect.
-STATE_SERVICE_QOS = QoSProfile(
-    depth=2,
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-    liveliness=LivelinessPolicy.AUTOMATIC,
-    liveliness_lease_duration=Duration(seconds=1),
-)
+
+def _resolve_package_uri(value: str) -> str:
+    """Resolve a 'package://' or 'src://' value to a real path via ament_index.
+
+    'package://<pkg>/<subpath>' lands in that package's *install-space* share directory -
+    stable regardless of whether --symlink-install works (it doesn't, in this workspace's
+    colcon setup), since ament_index's resource files point at the install prefix either way.
+
+    'src://<repo>/<subpath>' lands in the workspace's *source* tree instead - derived from
+    so_arm_control's own install prefix (<ws>/install/so_arm_control), independent of both CWD
+    and --symlink-install, assuming the standard colcon <ws>/src, <ws>/install layout.
+
+    Values that aren't one of these schemes are returned unchanged (absolute/relative
+    overrides still work).
+    """
+    if value.startswith('package://'):
+        pkg, _, subpath = value.removeprefix('package://').partition('/')
+        return os.path.join(get_package_share_directory(pkg), subpath)
+    if value.startswith('src://'):
+        ws_root = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_control')))
+        return os.path.join(ws_root, 'src', value.removeprefix('src://'))
+    return value
 
 
 class RecordReplayNode(Node):
-    """Owns /record and /replay (both SetBool); writes/reads mcap bags of /joint_states."""
+    """Owns 'record' and 'replay' (both SetBool); writes/reads mcap bags of 'joint_states'."""
 
-    def __init__(self):
-        super().__init__('record_replay_node')
+    def __init__(self, parameter_overrides: list | None = None):
+        super().__init__('record_replay_node', parameter_overrides=parameter_overrides)
 
-        self.declare_parameter(
-            'recordings_dir', '/home/ubuntu/ros2_ws/src/so_arm_ros2/recordings'
-        )
-        self.declare_parameter('joint_states_topic', '/joint_states')
-        self.declare_parameter('dynamic_joint_states_topic', '/dynamic_joint_states')
-        self.declare_parameter('estop_service', '/emergency_stop')
-        self.declare_parameter('output_topic', '/joint_commands_replay')
+        # src:// resolves via ament_index (see _resolve_package_uri) - stable regardless of
+        # CWD or username, unlike a bare relative/absolute path.
+        self.declare_parameter('recordings_dir', 'src://so_arm_ros2/so_arm_control/recordings')
+        self.declare_parameter('joint_states_topic', 'joint_states')
+        self.declare_parameter('dynamic_joint_states_topic', 'dynamic_joint_states')
+        self.declare_parameter('tf_topic', 'tf')
+        self.declare_parameter('estop_status_topic', 'emergency_stop_active')
+        self.declare_parameter('output_topic', 'joint_commands_replay')
         self.declare_parameter('joint_names', Parameter.Type.STRING_ARRAY)
         self.declare_parameter('publish_rate', 50.0)
-        self.declare_parameter('replay_gripper', True)
+        # 0 = loop forever (until paused or e-stopped), N>0 = exactly N total passes. Read once
+        # at startup - not a live-settable parameter.
+        self.declare_parameter('replay_loops', 1)
         self.declare_parameter('gripper_joint', 'gripper_joint')
         self.declare_parameter('gripper_action_name', 'gripper_controller/gripper_cmd')
+        self.declare_parameter('record_active_topic', 'record_active')
+        self.declare_parameter('replay_active_topic', 'replay_active')
 
-        self._recordings_dir = self.get_parameter('recordings_dir').value
+        self._recordings_dir = _resolve_package_uri(self.get_parameter('recordings_dir').value)
         self._joint_states_topic = self.get_parameter('joint_states_topic').value
         self._dynamic_joint_states_topic = (
             self.get_parameter('dynamic_joint_states_topic').value
         )
-        estop_service = self.get_parameter('estop_service').value
+        self._tf_topic = self.get_parameter('tf_topic').value
+        estop_status_topic = self.get_parameter('estop_status_topic').value
         output_topic = self.get_parameter('output_topic').value
-        joint_names_param = self.get_parameter_or(
-            'joint_names', Parameter('joint_names', Parameter.Type.STRING_ARRAY, [])
-        )
-        self._joint_names = list(joint_names_param.value)
-        if not self._joint_names:
-            raise RuntimeError(
-                "Required parameter 'joint_names' is empty or unset - pass it via a "
-                'parameters yaml (e.g. so_arm_control/config/record_replay.yaml) or '
-                '-p joint_names:="[...]" on the command line.'
-            )
+        self._joint_names = require_parameter(self, 'joint_names', array=True)
         publish_rate = float(self.get_parameter('publish_rate').value)
-        self._replay_gripper = bool(self.get_parameter('replay_gripper').value)
         self._gripper_joint = self.get_parameter('gripper_joint').value
         gripper_action_name = self.get_parameter('gripper_action_name').value
+        replay_loops = int(self.get_parameter('replay_loops').value)
+        try:
+            self._playback = BagPlayer(replay_loops)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
 
-        # Recording state.
-        self._writer = None
-        self._bag_dir: str | None = None
-
-        # Replay state. self._completed forces the next 'true' to reload from disk instead of
-        # resuming - set on natural completion, e-stop abort, and at startup (nothing loaded yet).
-        self._messages: list[tuple[float, JointState]] | None = None
-        self._index = 0
-        self._elapsed_at_pause = 0.0  # seconds of playback consumed before the current segment
-        self._segment_start_wall: float | None = None  # time.monotonic() ref, None = not running
-        self._completed = True
+        self._recorder = BagRecorder(self._recordings_dir, [
+            (0, self._joint_states_topic, 'sensor_msgs/msg/JointState'),
+            (1, self._dynamic_joint_states_topic, 'control_msgs/msg/DynamicJointState'),
+            (2, self._tf_topic, 'tf2_msgs/msg/TFMessage'),
+        ])
         self._last_gripper_sent: float | None = None
 
         self._estop_active = False
-        self._estop_pending: dict = {}
 
         # raw=True: forward the exact CDR bytes straight into the bag, no deserialize/reserialize
         # round-trip - also means this node never needs to know the message layout, only the type.
@@ -100,57 +105,43 @@ class RecordReplayNode(Node):
             DynamicJointState, self._dynamic_joint_states_topic,
             self._on_dynamic_joint_states_raw, 10, raw=True,
         )
+        self.create_subscription(
+            TFMessage, self._tf_topic, self._on_tf_raw, 10, raw=True,
+        )
 
         self._pub = self.create_publisher(JointState, output_topic, 10)
         self._gripper_client = ActionClient(self, ParallelGripperCommand, gripper_action_name)
-        self._self_client = self.create_client(SetBool, '/replay')
+        self._self_client = self.create_client(SetBool, 'replay')
+
+        record_active_topic = self.get_parameter('record_active_topic').value
+        replay_active_topic = self.get_parameter('replay_active_topic').value
+        self._record_active_pub = self.create_publisher(
+            Bool, record_active_topic, LATCHED_BOOL_QOS,
+        )
+        self._replay_active_pub = self.create_publisher(
+            Bool, replay_active_topic, LATCHED_BOOL_QOS,
+        )
+        self._record_active_pub.publish(Bool(data=False))
+        self._replay_active_pub.publish(Bool(data=False))
 
         self.create_subscription(
-            SetBool_Event, f'{estop_service}/_service_event',
-            functools.partial(
-                self._track_event, pending=self._estop_pending, on_change=self._on_estop_change,
-            ),
-            STATE_SERVICE_QOS,
+            Bool, estop_status_topic, lambda msg: self._on_estop_change(msg.data), LATCHED_BOOL_QOS,
         )
 
-        record_srv = self.create_service(SetBool, '/record', self._record_cb)
-        record_srv.configure_introspection(
-            self.get_clock(), STATE_SERVICE_QOS, ServiceIntrospectionState.CONTENTS,
-        )
-        replay_srv = self.create_service(SetBool, '/replay', self._replay_cb)
-        replay_srv.configure_introspection(
-            self.get_clock(), STATE_SERVICE_QOS, ServiceIntrospectionState.CONTENTS,
-        )
+        self.create_service(SetBool, 'record', self._record_cb)
+        self.create_service(SetBool, 'replay', self._replay_cb)
 
         self._timer = self.create_timer(1.0 / publish_rate, self._on_timer)
         self.get_logger().info(
             f"record_replay_node ready: '/record' -> {self._recordings_dir}/<timestamp>/, "
-            f"'/replay' -> '{output_topic}' (replay_gripper={self._replay_gripper})"
+            f"'/replay' -> '{output_topic}'"
         )
-
-    def _track_event(self, msg: SetBool_Event, *, pending: dict, on_change) -> None:
-        """Correlate a SetBool's request/response by (client_gid, sequence_number)."""
-        key = (bytes(msg.info.client_gid), msg.info.sequence_number)
-
-        if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
-            if msg.request:
-                pending[key] = msg.request[0].data
-            if len(pending) > 16:  # defensive cap, shouldn't normally fill
-                pending.pop(next(iter(pending)), None)
-            return
-
-        if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
-            if key not in pending or not msg.response:
-                return
-            value = pending.pop(key)
-            if msg.response[0].success:
-                on_change(value)
 
     def _on_estop_change(self, value: bool) -> None:
         self._estop_active = value
         if not value:
             return
-        if self._writer is not None:
+        if self._recorder.is_recording:
             self.get_logger().warning('Emergency stop engaged mid-recording - saving and stopping')
             self._stop_recording()
         self._abort_replay('emergency stop engaged')
@@ -158,77 +149,49 @@ class RecordReplayNode(Node):
     # ── recording ──────────────────────────────────────────────────────────────
 
     def _on_joint_states_raw(self, raw: bytes) -> None:
-        if self._writer is None:
-            return
-        self._writer.write(self._joint_states_topic, raw, self.get_clock().now().nanoseconds)
+        self._recorder.write(self._joint_states_topic, raw, self.get_clock().now().nanoseconds)
 
     def _on_dynamic_joint_states_raw(self, raw: bytes) -> None:
-        if self._writer is None:
-            return
-        self._writer.write(
+        self._recorder.write(
             self._dynamic_joint_states_topic, raw, self.get_clock().now().nanoseconds,
         )
 
-    def _start_recording(self) -> tuple[bool, str]:
-        os.makedirs(self._recordings_dir, exist_ok=True)
-        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        bag_dir = os.path.join(self._recordings_dir, stamp)
-
-        writer = rosbag2_py.SequentialWriter()
-        try:
-            writer.open(
-                rosbag2_py.StorageOptions(uri=bag_dir, storage_id='mcap'),
-                rosbag2_py.ConverterOptions('cdr', 'cdr'),
-            )
-        except RuntimeError as exc:
-            return False, f"Failed to open bag at '{bag_dir}': {exc}"
-
-        writer.create_topic(rosbag2_py.TopicMetadata(
-            id=0, name=self._joint_states_topic, type='sensor_msgs/msg/JointState',
-            serialization_format='cdr',
-        ))
-        writer.create_topic(rosbag2_py.TopicMetadata(
-            id=1, name=self._dynamic_joint_states_topic,
-            type='control_msgs/msg/DynamicJointState', serialization_format='cdr',
-        ))
-
-        self._writer = writer
-        self._bag_dir = bag_dir
-        return True, f"Recording to '{bag_dir}'"
+    def _on_tf_raw(self, raw: bytes) -> None:
+        self._recorder.write(self._tf_topic, raw, self.get_clock().now().nanoseconds)
 
     def _stop_recording(self) -> None:
-        if self._writer is None:
-            return
-        self._writer.close()
-        self.get_logger().info(f"Recording saved to '{self._bag_dir}'")
-        self._writer = None
-        self._bag_dir = None
+        bag_dir = self._recorder.stop()
+        if bag_dir is not None:
+            self.get_logger().info(f"Recording saved to '{bag_dir}'")
+            self._record_active_pub.publish(Bool(data=False))
 
     def _record_cb(self, request: SetBool.Request, response: SetBool.Response) -> SetBool.Response:
         if request.data:
-            if self._writer is not None:
+            if self._recorder.is_recording:
                 response.success = True
-                response.message = f"Already recording to '{self._bag_dir}'"
+                response.message = f"Already recording to '{self._recorder.bag_dir}'"
                 return response
-            if self._estop_active:
-                response.success = False
-                response.message = 'Cannot start recording: emergency stop is engaged'
-                return response
-            if self._segment_start_wall is not None:
+            # Deliberately allowed while e-stop is engaged: hand-guiding (backdriving) the arm
+            # for kinesthetic teaching requires torque off, i.e. e-stop active, during the
+            # recording itself. /replay stays gated on e-stop below - torque's off, so replayed
+            # commands wouldn't move the arm anyway.
+            if self._playback.segment_start_wall is not None:
                 response.success = False
                 response.message = 'Cannot start recording: a replay is in progress'
                 return response
-            ok, message = self._start_recording()
+            ok, message = self._recorder.start()
             response.success = ok
             response.message = message
             (self.get_logger().info if ok else self.get_logger().error)(message)
+            if ok:
+                self._record_active_pub.publish(Bool(data=True))
             return response
 
-        if self._writer is None:
+        if not self._recorder.is_recording:
             response.success = True
             response.message = 'Not recording'
             return response
-        bag_dir = self._bag_dir
+        bag_dir = self._recorder.bag_dir
         self._stop_recording()
         response.success = True
         response.message = f"Recording saved to '{bag_dir}'"
@@ -245,53 +208,12 @@ class RecordReplayNode(Node):
         self._self_client.call_async(request)  # fire-and-forget: never awaited, so no deadlock
 
     def _abort_replay(self, reason: str) -> None:
-        if self._messages is None or self._completed:
+        if self._playback.messages is None or self._playback.completed:
             return
-        self._segment_start_wall = None
-        self._completed = True
+        self._playback.abort()
         self.get_logger().warning(f'Replay aborted: {reason}')
+        self._replay_active_pub.publish(Bool(data=False))
         self._self_set_active(False)
-
-    def _finish_replay(self) -> None:
-        self._segment_start_wall = None
-        self._completed = True
-        self.get_logger().info('Replay complete')
-        self._self_set_active(False)
-
-    def _load_latest_recording(self) -> tuple[bool, str]:
-        if not os.path.isdir(self._recordings_dir):
-            return False, 'No recordings found'
-        candidates = sorted(
-            name for name in os.listdir(self._recordings_dir)
-            if os.path.isfile(os.path.join(self._recordings_dir, name, 'metadata.yaml'))
-        )
-        if not candidates:
-            return False, 'No recordings found'
-        bag_dir = os.path.join(self._recordings_dir, candidates[-1])
-
-        reader = rosbag2_py.SequentialReader()
-        try:
-            reader.open(
-                rosbag2_py.StorageOptions(uri=bag_dir, storage_id='mcap'),
-                rosbag2_py.ConverterOptions('cdr', 'cdr'),
-            )
-        except RuntimeError as exc:
-            return False, f"Failed to open '{bag_dir}': {exc}"
-        reader.set_filter(rosbag2_py.StorageFilter(topics=[self._joint_states_topic]))
-
-        raw_messages = []
-        while reader.has_next():
-            _, data, t = reader.read_next()
-            raw_messages.append((t, deserialize_message(data, JointState)))
-        reader.close()
-
-        if not raw_messages:
-            return False, f"Recording '{bag_dir}' has no {self._joint_states_topic} samples"
-
-        t0 = raw_messages[0][0]
-        self._messages = [((t - t0) / 1e9, msg) for t, msg in raw_messages]
-        self._bag_dir = bag_dir
-        return True, f"Replaying '{bag_dir}' ({len(self._messages)} samples)"
 
     def _send_gripper_goal(self, position: float) -> None:
         if not self._gripper_client.server_is_ready():
@@ -304,18 +226,11 @@ class RecordReplayNode(Node):
         self._gripper_client.send_goal_async(goal)
 
     def _on_timer(self) -> None:
-        if self._messages is None or self._segment_start_wall is None:
+        result = self._playback.advance(time.monotonic())
+        if result is None:
             return  # nothing loaded, or paused/stopped
+        sample, looped, finished = result
 
-        offset = self._elapsed_at_pause + (time.monotonic() - self._segment_start_wall)
-        last_offset = self._messages[-1][0]
-        while (
-            self._index + 1 < len(self._messages)
-            and self._messages[self._index + 1][0] <= offset
-        ):
-            self._index += 1
-
-        sample = self._messages[self._index][1]
         name_to_position = dict(zip(sample.name, sample.position))
         try:
             positions = [name_to_position[name] for name in self._joint_names]
@@ -330,7 +245,7 @@ class RecordReplayNode(Node):
             out.position = positions
             self._pub.publish(out)
 
-        if self._replay_gripper and self._gripper_joint in name_to_position:
+        if self._gripper_joint in name_to_position:
             gripper_position = name_to_position[self._gripper_joint]
             if (
                 self._last_gripper_sent is None
@@ -339,8 +254,15 @@ class RecordReplayNode(Node):
                 self._send_gripper_goal(gripper_position)
                 self._last_gripper_sent = gripper_position
 
-        if offset >= last_offset and self._index == len(self._messages) - 1:
-            self._finish_replay()
+        if looped:
+            # Force the first sample of the next pass to be treated as changed, even if it
+            # coincidentally matches the position just sent above.
+            self._last_gripper_sent = None
+
+        if finished:
+            self.get_logger().info('Replay complete')
+            self._replay_active_pub.publish(Bool(data=False))
+            self._self_set_active(False)
 
     def _replay_cb(self, request: SetBool.Request, response: SetBool.Response) -> SetBool.Response:
         if request.data:
@@ -348,38 +270,39 @@ class RecordReplayNode(Node):
                 response.success = False
                 response.message = 'Cannot start replay: emergency stop is engaged'
                 return response
-            if self._writer is not None:
+            if self._recorder.is_recording:
                 response.success = False
                 response.message = 'Cannot start replay: a recording is in progress'
                 return response
 
-            if self._messages is None or self._completed:
-                ok, message = self._load_latest_recording()
+            if self._playback.messages is None or self._playback.completed:
+                ok, message = self._playback.load_latest(
+                    self._recordings_dir, self._joint_states_topic,
+                )
                 if not ok:
                     response.success = False
                     response.message = message
                     return response
-                self._index = 0
-                self._elapsed_at_pause = 0.0
-                self._completed = False
+                self._playback.arm()
                 self._last_gripper_sent = None
             else:
                 message = 'Replay resumed'
 
-            self._segment_start_wall = time.monotonic()
+            self._playback.start(time.monotonic())
+            self._replay_active_pub.publish(Bool(data=True))
             response.success = True
             response.message = message
             self.get_logger().info(response.message)
             return response
 
-        if self._segment_start_wall is None:
+        if self._playback.segment_start_wall is None:
             response.success = True
             response.message = (
-                'Replay already paused' if self._messages is not None else 'Not replaying'
+                'Replay already paused' if self._playback.messages is not None else 'Not replaying'
             )
             return response
-        self._elapsed_at_pause += time.monotonic() - self._segment_start_wall
-        self._segment_start_wall = None
+        self._playback.pause(time.monotonic())
+        self._replay_active_pub.publish(Bool(data=False))
         response.success = True
         response.message = 'Replay paused'
         self.get_logger().info(response.message)
@@ -389,15 +312,7 @@ class RecordReplayNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = RecordReplayNode()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        print('Received keyboard interrupt!')
-    except ExternalShutdownException:
-        print('Received external shutdown request!')
-    finally:
-        node.destroy_node()
-        rclpy.try_shutdown()
+    spin_and_shutdown(node)
 
 
 if __name__ == '__main__':

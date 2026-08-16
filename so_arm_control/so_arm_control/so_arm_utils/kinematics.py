@@ -12,13 +12,8 @@ sys.path = [p for p in sys.path if '/.local/lib/' not in p]
 import numpy as np
 import pinocchio as pin
 
-
-def _rpy_to_R(r: float, p: float, y: float) -> np.ndarray:
-    cr, sr, cp, sp, cy, sy = np.cos(r), np.sin(r), np.cos(p), np.sin(p), np.cos(y), np.sin(y)
-    Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
-    Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
-    Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
-    return Rz @ Ry @ Rx
+from so_arm_control.so_arm_utils.rotation import rpy_to_R
+from so_arm_control.so_arm_utils.urdf import parse_joint_velocity_and_limits
 
 
 def _rotvec(R: np.ndarray) -> np.ndarray:
@@ -34,33 +29,10 @@ def _rotvec(R: np.ndarray) -> np.ndarray:
 def _parse_max_velocity(urdf_xml: str, joint_names: list[str]) -> dict[str, float]:
     """Parse per-joint max_velocity (rad/s), preferring ros2_control's own param over <limit>."""
     try:
-        root = ElementTree.fromstring(urdf_xml)
+        max_velocity, _limits = parse_joint_velocity_and_limits(urdf_xml, joint_names)
     except ElementTree.ParseError:
         return {}
-    found = {}
-    ros2_control_elem = root.find('ros2_control')
-    if ros2_control_elem is not None:
-        for joint_elem in ros2_control_elem.findall('joint'):
-            name = joint_elem.get('name')
-            if name not in joint_names:
-                continue
-            for param_elem in joint_elem.findall('param'):
-                if param_elem.get('name') == 'max_velocity':
-                    velocity = float(param_elem.text)
-                    if velocity > 0.0:
-                        found[name] = velocity
-                    break
-    for joint_elem in root.findall('joint'):
-        name = joint_elem.get('name')
-        if name in found or name not in joint_names:
-            continue
-        limit_elem = joint_elem.find('limit')
-        if limit_elem is None:
-            continue
-        velocity = float(limit_elem.get('velocity', 0.0))
-        if velocity > 0.0:
-            found[name] = velocity
-    return found
+    return max_velocity
 
 
 class _PinocchioIK:
@@ -154,7 +126,7 @@ class _PinocchioIK:
         """Return {joint_name: angle} for target_xyz+target_roll, warm-started from `current`."""
         q = self._cold_start_q.copy() if current is None else self._q_from_joint_values(current)
         target_xyz = np.array(target_xyz)
-        target_R = _rpy_to_R(target_roll, self._default_pitch, self._default_yaw)
+        target_R = rpy_to_R(target_roll, self._default_pitch, self._default_yaw)
 
         for _ in range(self._MAX_ITERS):
             pin.framesForwardKinematics(self._model, self._data, q)

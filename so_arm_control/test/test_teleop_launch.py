@@ -19,6 +19,7 @@ graceful-failure-when-target-missing, external-sync) is already covered there in
 """
 
 import itertools
+import tempfile
 import time
 import unittest
 
@@ -32,9 +33,13 @@ import launch_testing.actions
 import pytest
 import rclpy
 from std_msgs.msg import Float64
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import Trigger
 
 _name_counter = itertools.count()
+
+# record_replay_node (now part of teleop.launch.py) would otherwise write into the real
+# so_arm_ros2/recordings/ - keep test runs out of it, matching test_control_launch.py.
+_TEST_RECORDINGS_DIR = tempfile.mkdtemp(prefix='so_arm_control_teleop_test_recordings_')
 
 
 @pytest.mark.launch_test
@@ -44,6 +49,7 @@ def generate_test_description():
     ])
     teleop = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(teleop_launch),
+        launch_arguments={'recordings_dir': _TEST_RECORDINGS_DIR}.items(),
     )
     return launch.LaunchDescription([
         teleop,
@@ -68,19 +74,13 @@ class TestTeleopNodesComeUp(unittest.TestCase):
         cls._node.destroy_node()
 
     def test_expected_trigger_services_available(self):
-        for svc in ('/emergency_stop_toggle', '/joint_state_switch_toggle',
-                    '/waypoint_follow_toggle'):
+        for svc in ('/emergency_stop_toggle', '/joint_state_switch_toggle'):
             client = self._node.create_client(Trigger, svc)
-            self.assertTrue(client.wait_for_service(timeout_sec=30.0), f'{svc} never available')
-
-    def test_expected_waypoint_services_available(self):
-        for svc in ('/record_waypoint', '/waypoint_follow', '/reset_waypoints'):
-            client = self._node.create_client(SetBool, svc)
             self.assertTrue(client.wait_for_service(timeout_sec=30.0), f'{svc} never available')
 
 
 class TestTeleopTopicsAcceptInput(unittest.TestCase):
-    """Smoke only: no /robot_description here for ik_teleop_node, just proves no crash."""
+    """Smoke only: no /robot_description here for teleop_ik_node, just proves no crash."""
 
     @classmethod
     def setUpClass(cls):

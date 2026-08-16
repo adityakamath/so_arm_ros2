@@ -5,10 +5,13 @@ Node-level unit tests for JointTrajectoryBridge, the safety-critical bridge node
 Self-collision-checks every commanded target before it reaches the real controller.
 
 JointTrajectoryBridge requires a non-empty 'joint_names' parameter with no usable default
-(raises RuntimeError if unset), and - like bool_toggle_node/joint_state_switch_node - doesn't
-forward parameter_overrides through to Node.__init__, so it can't be constructed with test
-overrides via the public constructor. Rather than duplicate its parameter-declaration
-boilerplate here, these tests build a real, fully-initialized Node via
+(raises RuntimeError if unset). TestRealConstruction below builds it through its actual
+__init__ via parameter_overrides, to catch constructor-level bugs the doubles below can't see
+(they skip __init__ entirely) - see joint_state_switch_node's own once-undefined
+_own_switch_cb/_on_observed_event for why that class of bug matters here.
+
+For the pure-logic tests below, rather than pay a full real construction (URDF, self-collision
+mesh loading) for every test case, these build a real, fully-initialized Node via
 JointTrajectoryBridge.__new__() + Node.__init__() directly (skipping only the subclass's own
 __init__), then set the handful of instance attributes its methods actually read. get_logger()/
 get_clock()/publishers all work normally since the underlying Node is real, not mocked.
@@ -18,15 +21,31 @@ import itertools
 
 import pytest
 from rclpy.node import Node as RclpyNode
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
 
 from so_arm_control.joint_trajectory_bridge_node import JointTrajectoryBridge
+from so_arm_control.so_arm_utils.collision_resolution import CollisionResolver
 
 _name_counter = itertools.count()
 
 
+class TestRealConstruction:
+
+    def test_constructs_without_error(self):
+        node = JointTrajectoryBridge(parameter_overrides=[
+            Parameter('joint_names', Parameter.Type.STRING_ARRAY, ['j1', 'j2']),
+        ])
+        node.destroy_node()
+
+
 class _FakeCollisionChecker:
-    """collide_when(v)->bool decides check(); joints_between_cache mirrors the real one."""
+    """collide_when(v)->bool decides check(); joints_between_cache mirrors the real one.
+
+    CollisionResolver's own unit tests (test_collision_resolution.py) exercise its algorithm
+    directly - this double is only used here to verify the node WIRES a collision resolver in
+    and respects its verdict, not to re-test the algorithm itself.
+    """
 
     def __init__(self, collide_when, joints_between_cache=None):
         self.collide_when = collide_when
@@ -49,6 +68,11 @@ def _make_bridge(joint_names=('j1',), collision_checker=None):
     bridge._previous_target = {}
     bridge._previous_time = None
     bridge._collision_checker = collision_checker
+    bridge._collision_resolver = (
+        CollisionResolver(collision_checker, joint_names, bridge.get_logger())
+        if collision_checker is not None else None
+    )
+    bridge._estop_active = False
     published = []
     bridge._pub = type('P', (), {'publish': staticmethod(published.append)})()
     bridge._published = published
@@ -60,78 +84,6 @@ def bridge():
     b = _make_bridge()
     yield b
     b.destroy_node()
-
-
-class TestCheckPath:
-
-    def test_catches_collision_strictly_between_safe_endpoints(self, bridge):
-        """Endpoints j1=0.0/1.0 are individually safe; a pocket sits strictly between them."""
-        bridge._collision_checker = _FakeCollisionChecker(
-            collide_when=lambda v: 0.4 < v.get('j1', 0) < 0.6,
-        )
-        colliding = bridge._check_path({'j1': 1.0}, {'j1': 0.0})
-        assert colliding == [('linkA', 'linkB')]
-
-    def test_clear_path_reports_no_collision(self, bridge):
-        bridge._collision_checker = _FakeCollisionChecker(collide_when=lambda v: False)
-        assert bridge._check_path({'j1': 1.0}, {'j1': 0.0}) == []
-
-
-class TestResolveCollisions:
-
-    def test_per_joint_clamp_resolves_when_sufficient(self, bridge):
-        bridge._joint_names = ['j1']
-        bridge._collision_checker = _FakeCollisionChecker(
-            collide_when=lambda v: v.get('j1', 0) > 0.5,
-            joints_between_cache={('linkA', 'linkB'): {'j1'}},
-        )
-        joint_values = {'j1': 1.0}
-        assert bridge._resolve_collisions(joint_values, {'j1': 0.0}) is True
-        assert joint_values['j1'] == pytest.approx(0.5)  # clamped to the collision boundary
-
-    def test_rejects_when_colliding_joint_not_commandable(self, bridge):
-        """joints_between_cache says only 'j2' (not in _joint_names) can resolve it."""
-        bridge._joint_names = ['j1']
-        bridge._collision_checker = _FakeCollisionChecker(
-            collide_when=lambda v: True,
-            joints_between_cache={('linkA', 'linkB'): {'j2'}},
-        )
-        result = bridge._resolve_collisions({'j1': 0.5, 'j2': 0.5}, {'j1': 0.0, 'j2': 0.0})
-        assert result is False
-
-    def test_rejects_when_current_position_unknown(self, bridge):
-        bridge._joint_names = ['j1', 'j2']
-        bridge._collision_checker = _FakeCollisionChecker(
-            collide_when=lambda v: True,
-            joints_between_cache={('linkA', 'linkB'): {'j2'}},
-        )
-        # j2 missing from `current` entirely.
-        result = bridge._resolve_collisions({'j1': 0.5, 'j2': 0.5}, {'j1': 0.0})
-        assert result is False
-
-    def test_clear_path_resolves_immediately_without_clamping(self, bridge):
-        bridge._collision_checker = _FakeCollisionChecker(collide_when=lambda v: False)
-        joint_values = {'j1': 1.0}
-        assert bridge._resolve_collisions(joint_values, {'j1': 0.0}) is True
-        assert joint_values['j1'] == 1.0  # untouched
-
-
-class TestScanToBoundaryGroup:
-    """Direct coverage - forcing _resolve_collisions to reach this path is fragile to build."""
-
-    def test_clamps_both_joints_together_along_shared_fraction(self, bridge):
-        # Collides once the joint sum exceeds 1.0 - the boundary sits at frac=0.5 (j1=j2=0.5)
-        # when both are scanned together from 0.0 to 1.0.
-        bridge._collision_checker = _FakeCollisionChecker(
-            collide_when=lambda v: v.get('j1', 0) + v.get('j2', 0) > 1.0,
-        )
-        joint_values = {'j1': 1.0, 'j2': 1.0}
-        bridge._scan_to_boundary_group(
-            joint_values, requested={'j1': 1.0, 'j2': 1.0}, needed={'j1', 'j2'},
-            pairs=[('linkA', 'linkB')], safe_values={'j1': 0.0, 'j2': 0.0},
-        )
-        assert joint_values['j1'] == pytest.approx(0.5)
-        assert joint_values['j2'] == pytest.approx(0.5)
 
 
 class TestOnJointState:
@@ -161,11 +113,25 @@ class TestOnJointState:
         seconds = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9
         assert seconds == pytest.approx(2.0, abs=1e-3)
 
-    def test_collision_checker_blocking_prevents_publish(self, bridge):
+    def test_collision_resolver_blocking_prevents_publish(self, bridge):
         bridge._joint_names = ['j1']
-        bridge._collision_checker = _FakeCollisionChecker(
+        checker = _FakeCollisionChecker(
             collide_when=lambda v: True,
             joints_between_cache={('linkA', 'linkB'): {'j2'}},  # j2 isn't commandable
         )
+        bridge._collision_resolver = CollisionResolver(checker, ['j1'], bridge.get_logger())
         self._publish(bridge, ['j1'], [1.0])
         assert bridge._published == []
+
+    def test_estop_active_prevents_publish(self, bridge):
+        bridge._joint_names = ['j1']
+        bridge._on_estop_change(True)
+        self._publish(bridge, ['j1'], [0.5])
+        assert bridge._published == []
+
+    def test_estop_release_resumes_publish(self, bridge):
+        bridge._joint_names = ['j1']
+        bridge._on_estop_change(True)
+        bridge._on_estop_change(False)
+        self._publish(bridge, ['j1'], [0.5])
+        assert len(bridge._published) == 1
