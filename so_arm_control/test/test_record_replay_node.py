@@ -175,12 +175,13 @@ class TestEstopChange:
         node._on_estop_change(True)
         assert node._estop_active is True
 
-    def test_engaging_mid_recording_stops_and_saves(self, node):
+    def test_engaging_mid_recording_does_not_stop_it(self, node):
+        """Hand-guided (backdriven) recording needs torque off, i.e. e-stop engaged."""
         fake = _FakeRecorder(is_recording=True, bag_dir='/tmp/fake_bag')
         node._recorder = fake
         node._on_estop_change(True)
-        assert fake.stopped is True
-        assert fake.is_recording is False
+        assert fake.stopped is False
+        assert fake.is_recording is True
 
     def test_engaging_mid_replay_aborts_it(self, node):
         node._playback.messages = [(0.0, JointState())]
@@ -190,7 +191,7 @@ class TestEstopChange:
         assert node._playback.completed is True
         assert node._playback.segment_start_wall is None
 
-    def test_engaging_with_both_active_stops_both(self, node):
+    def test_engaging_with_both_active_stops_only_replay(self, node):
         """The scenario merging the two nodes made possible to hit in one estop callback."""
         fake = _FakeRecorder(is_recording=True, bag_dir='/tmp/fake_bag')
         node._recorder = fake
@@ -200,8 +201,8 @@ class TestEstopChange:
 
         node._on_estop_change(True)
 
-        assert fake.stopped is True
-        assert fake.is_recording is False
+        assert fake.stopped is False
+        assert fake.is_recording is True
         assert node._playback.completed is True
         assert node._playback.segment_start_wall is None
 
@@ -389,11 +390,11 @@ class TestActiveTopics:
         node._record_cb(SetBool.Request(data=False), SetBool.Response())
         assert node.record_active_published == [True, False]
 
-    def test_estop_triggered_stop_publishes_false(self, node):
+    def test_estop_during_recording_publishes_nothing(self, node):
         fake = _FakeRecorder(is_recording=True, bag_dir='/tmp/fake_bag')
         node._recorder = fake
         node._on_estop_change(True)
-        assert node.record_active_published == [False]
+        assert node.record_active_published == []
 
     def test_replay_start_pause_publish(self, node, tmp_path):
         _write_bag(tmp_path / '20260101_000000', [

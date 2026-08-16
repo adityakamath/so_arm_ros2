@@ -141,9 +141,10 @@ class RecordReplayNode(Node):
         self._estop_active = value
         if not value:
             return
+        # Recording deliberately keeps running through e-stop: hand-guiding (backdriving) the
+        # arm for kinesthetic teaching requires torque off, i.e. e-stop engaged, mid-recording.
         if self._recorder.is_recording:
-            self.get_logger().warning('Emergency stop engaged mid-recording - saving and stopping')
-            self._stop_recording()
+            self.get_logger().info('Emergency stop engaged mid-recording - recording continues')
         self._abort_replay('emergency stop engaged')
 
     # ── recording ──────────────────────────────────────────────────────────────
