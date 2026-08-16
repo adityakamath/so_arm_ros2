@@ -5,6 +5,8 @@ Reads the target's pose from TF (broadcast by teleop_ik_node, whether or not tel
 the currently-active joint_state_switch_node input) - no coupling to teleop_ik_node beyond that.
 Modes are entirely config-driven (see teleop.yaml): each watches a latched Bool status topic,
 plus a color. First active mode in priority order wins; none active falls back to default_color.
+One special case isn't config-driven: record+estop both active flashes between their two
+colors, since recording deliberately keeps running through e-stop.
 """
 
 import functools
@@ -37,6 +39,9 @@ class ModeColorResolver:
         if name not in self._active:
             raise ValueError(f"'{name}' is not a configured mode")
         self._active[name] = active
+
+    def is_active(self, name: str) -> bool:
+        return self._active.get(name, False)
 
     def resolve(self) -> Color:
         for name in self._order:
@@ -86,6 +91,12 @@ class TargetVisualizerNode(Node):
             )
 
         self._resolver = ModeColorResolver(mode_names, colors, default_color)
+        # Recording keeps running through e-stop (see record_replay_node); flash between the two
+        # colors rather than letting record's higher priority fully hide that estop is also up.
+        self._record_color = colors.get('record')
+        self._estop_color = colors.get('estop')
+        self.declare_parameter('flash_period', 0.3)
+        self._flash_period = float(self.get_parameter('flash_period').value)
 
         self._tf_buffer = tf2_ros.Buffer()
         self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
@@ -100,6 +111,15 @@ class TargetVisualizerNode(Node):
     def _on_status_topic(self, name: str, active_value: bool, msg: Bool) -> None:
         self._resolver.set_active(name, msg.data == active_value)
 
+    def _resolve_color(self) -> Color:
+        if (
+            self._record_color and self._estop_color
+            and self._resolver.is_active('record') and self._resolver.is_active('estop')
+        ):
+            phase = int(self.get_clock().now().nanoseconds // int(self._flash_period * 1e9)) % 2
+            return self._record_color if phase == 0 else self._estop_color
+        return self._resolver.resolve()
+
     def _on_timer(self) -> None:
         try:
             transform = self._tf_buffer.lookup_transform(
@@ -108,7 +128,7 @@ class TargetVisualizerNode(Node):
         except tf2_ros.TransformException:
             return
 
-        color = self._resolver.resolve()
+        color = self._resolve_color()
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.header.frame_id = self._parent_frame

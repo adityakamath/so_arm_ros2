@@ -5,7 +5,10 @@ Mirrors teleop.yaml's target_visualizer_node block via parameter_overrides - thi
 would catch a mode missing a required key (e.g. status_topic) or a bad values.
 """
 
+from unittest.mock import Mock
+
 from rclpy.parameter import Parameter
+from rclpy.time import Time
 from so_arm_control.target_visualizer_node import TargetVisualizerNode
 
 _MODES = ('record', 'estop', 'replay', 'slider', 'ik_teleop')
@@ -52,5 +55,30 @@ class TestRealConstruction:
             assert node.get_parameter('slider.status_topic').value == 'joint_state_switch_active'
             assert node.get_parameter('ik_teleop.status_topic').value == 'joint_state_switch_active'
             assert slider_active_value is not ik_teleop_active_value
+        finally:
+            node.destroy_node()
+
+
+class TestRecordEstopFlash:
+
+    def test_flashes_between_record_and_estop_when_both_active(self):
+        node = TargetVisualizerNode(parameter_overrides=_teleop_yaml_overrides())
+        try:
+            node._resolver.set_active('record', True)
+            node._resolver.set_active('estop', True)
+            node._flash_period = 1.0
+            node.get_clock = lambda: Mock(now=lambda: Time(nanoseconds=0))
+            first = node._resolve_color()
+            node.get_clock = lambda: Mock(now=lambda: Time(nanoseconds=int(1.5e9)))
+            second = node._resolve_color()
+            assert {first, second} == {node._record_color, node._estop_color}
+        finally:
+            node.destroy_node()
+
+    def test_no_flash_when_only_record_active(self):
+        node = TargetVisualizerNode(parameter_overrides=_teleop_yaml_overrides())
+        try:
+            node._resolver.set_active('record', True)
+            assert node._resolve_color() == node._record_color
         finally:
             node.destroy_node()

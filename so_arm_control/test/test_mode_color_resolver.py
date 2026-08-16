@@ -52,3 +52,14 @@ def test_set_active_on_unknown_mode_raises():
 def test_construction_rejects_order_entry_without_color():
     with pytest.raises(ValueError):
         ModeColorResolver(order=['estop', 'missing'], colors={'estop': _RED}, default_color=_DEFAULT)
+
+
+def test_is_active_reflects_set_active():
+    r = _resolver()
+    assert r.is_active('record') is False
+    r.set_active('record', True)
+    assert r.is_active('record') is True
+
+
+def test_is_active_on_unknown_mode_returns_false():
+    assert _resolver().is_active('nonexistent') is False
