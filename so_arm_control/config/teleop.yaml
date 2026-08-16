@@ -147,16 +147,12 @@
     marker_topic: ik_target_marker
     publish_rate: 30.0
     marker_scale: 0.02
-    # Matches ik_teleop.color below: the only window where no mode is active yet is the brief
-    # startup gap before joint_state_switch's first latched message resolves slider vs.
-    # ik_teleop, and ik_teleop is the correct color to show through that gap.
+    # Matches ik_teleop.color: shown only during the brief startup gap before joint_state_switch's
+    # first latched message arrives, whose true state is always ik_teleop.
     default_color: [0.0, 1.0, 0.4, 0.9]  # spring green
 
-    # Priority order, first listed = highest. Each mode watches a latched Bool status topic,
-    # plus a color. First active mode wins; none active falls back to default_color.
-    # record outranks estop: you can still be recording while e-stop is pressed, and that state
-    # is the more important one to see on the marker (target_visualizer_node flashes
-    # record/estop colors when both are active, rather than fully hiding estop behind record).
+    # Priority order, first = highest; first active mode's color wins, else default_color.
+    # record outranks estop, but both active flashes between their colors (see the node).
     modes: ["record", "estop", "replay", "slider", "ik_teleop"]
 
     record.status_topic: record_active
