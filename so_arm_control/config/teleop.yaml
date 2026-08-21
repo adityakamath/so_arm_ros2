@@ -149,7 +149,7 @@
     marker_scale: 0.02
     # Matches ik_teleop.color: shown only during the brief startup gap before joint_state_switch's
     # first latched message arrives, whose true state is always ik_teleop.
-    default_color: [0.0, 1.0, 0.4, 0.9]  # spring green
+    default_color: [0.5, 1.0, 1.0, 0.9]  # sky blue
 
     # Priority order, first = highest; first active mode's color wins, else default_color.
     # record outranks estop, but both active flashes between their colors (see the node).
@@ -157,7 +157,7 @@
 
     record.status_topic: record_active
     record.active_value: true
-    record.color: [1.0, 0.5, 0.0, 0.9]  # orange
+    record.color: [1.0, 0.0, 1.0, 0.9]  # magenta
 
     estop.status_topic: emergency_stop_active
     estop.active_value: true
@@ -165,12 +165,12 @@
 
     replay.status_topic: replay_active
     replay.active_value: true
-    replay.color: [0.0, 0.8, 1.0, 0.9]  # cyan
+    replay.color: [1.0, 1.0, 0.0, 0.9]  # yellow
 
     slider.status_topic: joint_state_switch_active
     slider.active_value: true
-    slider.color: [0.8, 0.8, 0.0, 0.9]  # yellow
+    slider.color: [0.0, 1.0, 0.5, 0.9]  # spring green
 
     ik_teleop.status_topic: joint_state_switch_active
     ik_teleop.active_value: false
-    ik_teleop.color: [0.0, 1.0, 0.4, 0.9]  # spring green
+    ik_teleop.color: [0.0, 1.0, 1.0, 0.9]  # cyan
