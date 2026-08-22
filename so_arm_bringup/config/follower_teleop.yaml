@@ -11,6 +11,7 @@
   ros__parameters:
     output_topic: joint_commands  # joint_trajectory_bridge's input
     publish_rate: 50.0
+    estop_status_topic: emergency_stop_active  # this namespace's own bool_toggle_node, above
     # replay (leader's record_replay_node, output redirected here) outranks live leader
     # tracking; leader_track is the service-less always-active fallback.
     inputs: ["replay", "leader_track"]

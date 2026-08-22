@@ -94,6 +94,7 @@
   ros__parameters:
     output_topic: joint_commands  # joint_trajectory_bridge's input
     publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
+    estop_status_topic: emergency_stop_active  # this namespace's own bool_toggle_node
     # priority order, first = highest; ik is the fallback. replay is highest so it locks out
     # teleop while active - pausing/finishing/e-stop all flip /replay false, handing control back.
     inputs: ["replay", "gui", "ik"]

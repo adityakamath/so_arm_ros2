@@ -33,6 +33,8 @@ class JointTrajectoryBridge(Node):
         # No default - must come from a parameters yaml or the command line.
         self.declare_parameter('joint_names', Parameter.Type.STRING_ARRAY)
         self.declare_parameter('min_time_from_start', 0.1)
+        # rad/s^2 - caps tick-to-tick change in commanded endpoint velocity.
+        self.declare_parameter('max_acceleration', 40.0)
         self.declare_parameter('enable_self_collision_check', True)
         self.declare_parameter('collision_margin', 0.01)
         self.declare_parameter('intersection_margin', 0.0)
@@ -43,6 +45,7 @@ class JointTrajectoryBridge(Node):
         self._joint_names = require_parameter(self, 'joint_names', array=True)
 
         self._min_time_from_start = float(self.get_parameter('min_time_from_start').value)
+        self._max_acceleration = float(self.get_parameter('max_acceleration').value)
         self._collision_check_enabled = bool(
             self.get_parameter('enable_self_collision_check').value
         )
@@ -59,9 +62,11 @@ class JointTrajectoryBridge(Node):
         self._max_velocity: dict[str, float] = {}  # rad/s/joint, filled in from /robot_description
         self._limits: dict[str, tuple] = {}  # (lower, upper) rad/joint, from /robot_description
         self._current_position: dict[str, float] = {}  # last known ACTUAL position, /joint_states
-        # Last commanded target/time - used to derive point.velocities in _on_joint_state.
+        # Last commanded target/time/velocity - used to derive point.velocities in
+        # _on_joint_state, and to acceleration-limit their tick-to-tick change.
         self._previous_target: dict[str, float] = {}
         self._previous_time = None
+        self._previous_velocity: dict[str, float] = {}
 
         # Real-time topics: drop a stale backlog rather than work through it if a callback lags.
         self._pub = self.create_publisher(JointTrajectory, output_topic, 10)
@@ -132,7 +137,14 @@ class JointTrajectoryBridge(Node):
                 )
 
     def _on_estop_change(self, value: bool) -> None:
+        was_active = self._estop_active
         self._estop_active = value
+        if was_active and not value:
+            # Discard target/time/velocity so the next point derives from live state, not
+            # data from before the e-stop window.
+            self._previous_target = {}
+            self._previous_time = None
+            self._previous_velocity = {}
 
     def _on_joint_states(self, msg: JointState) -> None:
         # Tracks every reported joint, not just self._joint_names - uncommanded joints (e.g.
@@ -186,6 +198,7 @@ class JointTrajectoryBridge(Node):
         if self._previous_time is not None:
             dt = (now - self._previous_time).nanoseconds * 1e-9
         velocities = []
+        new_previous_velocity = {}
         for name, target in zip(self._joint_names, positions):
             prev_target = self._previous_target.get(name)
             velocity = 0.0
@@ -194,9 +207,15 @@ class JointTrajectoryBridge(Node):
                 max_velocity = self._max_velocity.get(name)
                 if max_velocity:
                     velocity = max(-max_velocity, min(max_velocity, velocity))
+                # Acceleration-limit the change from last tick's velocity.
+                prev_velocity = self._previous_velocity.get(name, 0.0)
+                max_dv = self._max_acceleration * dt
+                velocity = max(prev_velocity - max_dv, min(prev_velocity + max_dv, velocity))
             velocities.append(velocity)
+            new_previous_velocity[name] = velocity
         self._previous_target = dict(zip(self._joint_names, positions))
         self._previous_time = now
+        self._previous_velocity = new_previous_velocity
 
         point = JointTrajectoryPoint()
         point.positions = positions

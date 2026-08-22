@@ -81,6 +81,17 @@ class JointStateSwitchNode(Node):
                 'command line.'
             )
 
+        # Published by bool_toggle_node's emergency_stop toggle. Empty = disabled (no e-stop
+        # awareness); set per-namespace (leader/follower each get their own bool_toggle_node).
+        self.declare_parameter('estop_status_topic', '')
+        estop_status_topic = self.get_parameter('estop_status_topic').value
+        self._estop_active = False
+        if estop_status_topic:
+            self.create_subscription(
+                Bool, estop_status_topic, lambda msg: self._on_estop_change(msg.data),
+                LATCHED_BOOL_QOS,
+            )
+
         self._pub = self.create_publisher(JointState, topic_output, 10)
         self._last_output: dict[str, float] | None = None  # last position actually published
         self._inputs = []
@@ -181,8 +192,14 @@ class JointStateSwitchNode(Node):
         response.message = f"'{name}' -> {'active' if request.data else 'inactive'}"
         return response
 
+    def _on_estop_change(self, value: bool) -> None:
+        self._estop_active = value
+
     def _on_timer(self) -> None:
         """Step self._last_output toward the active input's latest sample, velocity-limited."""
+        if self._estop_active:
+            # Freeze in place during e-stop instead of chasing the active input.
+            return
         active = next(i for i in self._inputs if i['name'] == self._active_input_name())
         target = active['latest']
         if target is None:

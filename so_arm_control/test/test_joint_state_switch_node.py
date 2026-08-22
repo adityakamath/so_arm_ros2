@@ -65,6 +65,7 @@ def _make_double(node, inputs, *, max_velocity=None, default_velocity=2.0, perio
         _max_velocity=max_velocity or {},
         _default_velocity=default_velocity,
         _last_output=None,
+        _estop_active=False,
         get_logger=node.get_logger,
         get_clock=node.get_clock,
     )
@@ -75,6 +76,7 @@ def _make_double(node, inputs, *, max_velocity=None, default_velocity=2.0, perio
     double._set_active = types.MethodType(JointStateSwitchNode._set_active, double)
     double._handle = types.MethodType(JointStateSwitchNode._handle, double)
     double._on_timer = types.MethodType(JointStateSwitchNode._on_timer, double)
+    double._on_estop_change = types.MethodType(JointStateSwitchNode._on_estop_change, double)
     double._on_status_topic = types.MethodType(JointStateSwitchNode._on_status_topic, double)
     double._own_switch_cb = types.MethodType(JointStateSwitchNode._own_switch_cb, double)
     return double

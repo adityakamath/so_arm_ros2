@@ -47,3 +47,11 @@
 /**/gripper_controller:
   ros__parameters:
     joint: gripper_joint
+
+# Serial ping retry tolerance (real hardware only).
+/**/sts_hardware_interface_node:
+  ros__parameters:
+    configure_ping_retry_attempts: 5
+    configure_ping_retry_delay_ms: 20
+    recovery_ping_retry_attempts: 5
+    recovery_ping_retry_delay_ms: 20
