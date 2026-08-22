@@ -1,23 +1,6 @@
 #!/usr/bin/env python3
-"""
-Node-level unit tests for RecordReplayNode.
-
-Covers _on_estop_change's reaction once e-stop is resolved to a bool (event correlation itself
-is shared logic, tested in test_service_event.py), /record's start/stop gating, /replay's
-fresh-start/resume/pause/reject gating, gripper-goal dispatch, and mutual exclusion between
-record and replay - now plain in-process attribute checks against node._recorder /
-node._playback rather than the cross-node service-event observation two separate nodes would
-need.
-
-BagRecorder's own start/stop/write behavior is tested in isolation in test_bag_recorder.py;
-BagPlayer's own bag-loading and playback-timing/looping state machine is tested in isolation in
-test_bag_player.py. This file only tests what's left once those are wired in: gating, gripper
-dispatch, and the transitions RecordReplayNode itself is responsible for.
-
-RecordReplayNode requires 'joint_names' with no default, so - like the other required-parameter
-nodes in this suite - it's built via __new__()/Node.__init__() directly rather than its own
-parameter-declaring constructor.
-"""
+"""Node-level unit tests for RecordReplayNode: /record and /replay gating, gripper-goal
+dispatch, and record/replay mutual exclusion. BagRecorder/BagPlayer are tested separately."""
 
 import itertools
 import os
@@ -30,9 +13,9 @@ from rclpy.parameter import Parameter
 from rclpy.serialization import serialize_message
 import rosbag2_py
 from sensor_msgs.msg import JointState
-from so_arm_control.record_replay_node import RecordReplayNode, _resolve_package_uri
-from so_arm_control.so_arm_utils.bag_player import BagPlayer
-from so_arm_control.so_arm_utils.bag_recorder import BagRecorder
+from so_arm_bringup.record_replay_node import RecordReplayNode, _resolve_package_uri
+from so_arm_bringup.so_arm_utils.bag_player import BagPlayer
+from so_arm_bringup.so_arm_utils.bag_recorder import BagRecorder
 from std_srvs.srv import SetBool
 
 _name_counter = itertools.count()
@@ -40,13 +23,8 @@ _JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint']
 
 
 class TestRealConstruction:
-    """Builds RecordReplayNode through its actual __init__, not the __new__() double below.
-
-    Every other test in this file uses the __new__()/Node.__init__() double (see _make_node),
-    which never runs RecordReplayNode's own __init__ and so can't catch a bug in it - e.g. a
-    functools.partial binding a method that doesn't exist (see joint_state_switch_node's own
-    history). This is the one test in the file that would catch that class of bug here too.
-    """
+    """Builds RecordReplayNode through its actual __init__ - every other test here uses the
+    __new__()/Node.__init__() double (_make_node), which can't catch a bug in __init__ itself."""
 
     def test_constructs_without_error(self):
         node = RecordReplayNode(parameter_overrides=[
@@ -60,15 +38,15 @@ class TestResolvePackageUri:
 
     def test_resolves_package_scheme_via_ament_index(self):
         from ament_index_python.packages import get_package_share_directory
-        resolved = _resolve_package_uri('package://so_arm_control/recordings')
-        expected = os.path.join(get_package_share_directory('so_arm_control'), 'recordings')
+        resolved = _resolve_package_uri('package://so_arm_bringup/recordings')
+        expected = os.path.join(get_package_share_directory('so_arm_bringup'), 'recordings')
         assert resolved == expected
 
     def test_resolves_src_scheme_via_ament_index(self):
         from ament_index_python.packages import get_package_prefix
-        resolved = _resolve_package_uri('src://so_arm_ros2/so_arm_control/recordings')
-        ws_root = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_control')))
-        expected = os.path.join(ws_root, 'src', 'so_arm_ros2', 'so_arm_control', 'recordings')
+        resolved = _resolve_package_uri('src://so_arm_ros2/so_arm_bringup/recordings')
+        ws_root = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_bringup')))
+        expected = os.path.join(ws_root, 'src', 'so_arm_ros2', 'so_arm_bringup', 'recordings')
         assert resolved == expected
 
     def test_non_package_value_is_returned_unchanged(self):
@@ -77,12 +55,8 @@ class TestResolvePackageUri:
 
 
 class _FakeRecorder:
-    """Mirrors BagRecorder's public surface without touching the filesystem.
-
-    BagRecorder's own start/stop/write behavior (including the real mcap round trip) is tested
-    in test_bag_recorder.py - this double is only used here to verify the node WIRES a recorder
-    in and respects its state, not to re-test the recorder itself.
-    """
+    """Mirrors BagRecorder's public surface without touching the filesystem - verifies the node
+    WIRES a recorder in and respects its state; BagRecorder itself is tested separately."""
 
     def __init__(self, is_recording=False, bag_dir=None):
         self.is_recording = is_recording
@@ -380,7 +354,8 @@ class TestOnTimer:
 
 class TestActiveTopics:
     """record_active/replay_active are published from the same code paths that own the state
-    transition - see so_arm_utils/qos.py's LATCHED_BOOL_QOS docstring for why."""
+    transition - see so_arm_control's so_arm_utils/qos.py's LATCHED_BOOL_QOS docstring for why.
+    """
 
     def test_record_start_and_stop_publish(self, node, tmp_path):
         node._recorder = BagRecorder(str(tmp_path), [

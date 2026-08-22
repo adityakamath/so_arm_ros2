@@ -5,7 +5,7 @@
 <!-- =================================================================================== -->
 <robot name="so101">
   <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
-  <!-- Max hardware velocity in steps/s -->
+  <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
   <!-- N⋅m (30 kgf⋅cm for STS3215) -->
   <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
   <material name="light_grey">
@@ -443,7 +443,6 @@
       <param name="communication_timeout_ms">100</param>
       <param name="use_sync_write">True</param>
       <param name="enable_mock_mode">False</param>
-      <param name="max_velocity_steps">3400</param>
       <param name="reset_states_on_activate">true</param>
     </hardware>
     <joint name="shoulder_pan_joint">
@@ -451,8 +450,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-1.91986</param>
       <param name="max_position">1.91986</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -468,8 +473,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-1.74533</param>
       <param name="max_position">1.74533</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -485,8 +496,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-1.69</param>
       <param name="max_position">1.69</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -502,8 +519,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-1.65806</param>
       <param name="max_position">1.65806</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -519,8 +542,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-2.74385</param>
       <param name="max_position">2.84121</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -536,8 +565,14 @@
       <param name="operating_mode">0</param>
       <param name="min_position">-1.74533</param>
       <param name="max_position">0.174533</param>
-      <param name="max_velocity">4.433204476989503</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">65535</param>
+      <param name="max_velocity">100.5294309340855</param>
       <param name="position_center_steps">2048</param>
+      <param name="p_coefficient">14</param>
+      <param name="d_coefficient">24</param>
+      <param name="i_coefficient">0</param>
+      <param name="deadband">10</param>
       <command_interface name="position"/>
       <command_interface name="velocity"/>
       <state_interface name="position"/>

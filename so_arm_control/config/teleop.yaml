@@ -90,25 +90,6 @@
       initial_state: false
       status_topic: replay_active  # published by record_replay_node
 
-/**/record_replay_node:
-  ros__parameters:
-    recordings_dir: src://so_arm_ros2/so_arm_control/recordings  # resolved via ament_index
-    joint_states_topic: joint_states
-    dynamic_joint_states_topic: dynamic_joint_states
-    tf_topic: tf
-    estop_status_topic: emergency_stop_active
-    output_topic: joint_commands_replay  # joint_state_switch_node's 'replay' input, below
-    joint_names:
-      - shoulder_pan_joint
-      - shoulder_lift_joint
-      - elbow_flex_joint
-      - wrist_flex_joint
-      - wrist_roll_joint
-    publish_rate: 50.0  # matches controller_manager's update_rate (control.yaml)
-    replay_loops: 1  # 0 = loop forever, N>0 = exactly N total passes
-    gripper_joint: gripper_joint
-    gripper_action_name: gripper_controller/gripper_cmd
-
 /**/joint_state_switch_node:
   ros__parameters:
     output_topic: joint_commands  # joint_trajectory_bridge's input
@@ -117,7 +98,7 @@
     # teleop while active - pausing/finishing/e-stop all flip /replay false, handing control back.
     inputs: ["replay", "gui", "ik"]
     replay.topic: joint_commands_replay
-    replay.status_topic: replay_active  # published by record_replay_node, above
+    replay.status_topic: replay_active  # published by record_replay_node (so_arm_bringup)
     gui.topic: joint_commands_gui
     gui.own_service: joint_state_switch
     ik.topic: joint_commands_ik

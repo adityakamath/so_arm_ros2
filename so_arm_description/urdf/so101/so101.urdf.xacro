@@ -16,6 +16,8 @@
   <!-- mujoco only -->
   <xacro:arg name="mujoco_model" default=""/>
   <xacro:arg name="mujoco_headless" default="false"/>
+  <!-- false = omit the wrist camera mount/body/frame links and their fixed joints below -->
+  <xacro:arg name="wrist_camera_urdf" default="true"/>
 
   <material name="light_grey">
     <color rgba="${light_grey_rgba}"/>
@@ -306,66 +308,67 @@
   </link>
 
   <!-- SO-101 wrist camera mount (Hex-Nut Recess, 32x32 UVC module form factor). -->
-  <link name="wrist_camera_mount_link">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.02"/>
-      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-      <material name="light_grey"/>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
-      </geometry>
-    </collision>
-  </link>
+  <xacro:if value="${'$(arg wrist_camera_urdf)' == 'true'}">
+    <link name="wrist_camera_mount_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.02"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="light_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
 
-  <link name="wrist_camera_body_link">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.015"/>
-      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
-      </geometry>
-      <material name="charcoal"/>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-        <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
-      </geometry>
-    </collision>
-  </link>
+    <link name="wrist_camera_body_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.015"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
+        </geometry>
+        <material name="charcoal"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://so_arm_description/meshes/so101/wrist_camera_so101_v1.stl"/>
+        </geometry>
+      </collision>
+    </link>
 
-  <!-- Upstream-aligned wrist camera frame (+X forward, -Y right, +Z up). -->
-  <link name="wrist_camera_frame">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-9"/>
-      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
-    </inertial>
-  </link>
+    <!-- Upstream-aligned wrist camera frame (+X forward, -Y right, +Z up). -->
+    <link name="wrist_camera_frame">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="1e-9"/>
+        <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+      </inertial>
+    </link>
 
-
-  <!-- REP-103 optical frame (+Z forward, +X right, +Y down). -->
-  <link name="wrist_camera_optical_frame">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="1e-9"/>
-      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
-    </inertial>
-  </link>
+    <!-- REP-103 optical frame (+Z forward, +X right, +Y down). -->
+    <link name="wrist_camera_optical_frame">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="1e-9"/>
+        <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+      </inertial>
+    </link>
+  </xacro:if>
 
   <!-- Moving jaw link -->
   <link name="moving_jaw_link">
@@ -440,29 +443,31 @@
     <origin xyz="${end_effector_xyz}" rpy="${end_effector_rpy}"/>
   </joint>
 
-  <joint name="wrist_camera_mount_joint" type="fixed">
-    <parent link="gripper_link"/>
-    <child link="wrist_camera_mount_link"/>
-    <origin xyz="${wrist_camera_mount_xyz}" rpy="${wrist_camera_mount_rpy}"/>
-  </joint>
+  <xacro:if value="${'$(arg wrist_camera_urdf)' == 'true'}">
+    <joint name="wrist_camera_mount_joint" type="fixed">
+      <parent link="gripper_link"/>
+      <child link="wrist_camera_mount_link"/>
+      <origin xyz="${wrist_camera_mount_xyz}" rpy="${wrist_camera_mount_rpy}"/>
+    </joint>
 
-  <joint name="wrist_camera_body_joint" type="fixed">
-    <parent link="wrist_camera_mount_link"/>
-    <child link="wrist_camera_body_link"/>
-    <origin xyz="${wrist_camera_body_xyz}" rpy="${wrist_camera_body_rpy}"/>
-  </joint>
+    <joint name="wrist_camera_body_joint" type="fixed">
+      <parent link="wrist_camera_mount_link"/>
+      <child link="wrist_camera_body_link"/>
+      <origin xyz="${wrist_camera_body_xyz}" rpy="${wrist_camera_body_rpy}"/>
+    </joint>
 
-  <joint name="wrist_camera_frame_joint" type="fixed">
-    <parent link="gripper_link"/>
-    <child link="wrist_camera_frame"/>
-    <origin xyz="${wrist_camera_frame_xyz}" rpy="${wrist_camera_frame_rpy}"/>
-  </joint>
+    <joint name="wrist_camera_frame_joint" type="fixed">
+      <parent link="gripper_link"/>
+      <child link="wrist_camera_frame"/>
+      <origin xyz="${wrist_camera_frame_xyz}" rpy="${wrist_camera_frame_rpy}"/>
+    </joint>
 
-  <joint name="wrist_camera_optical_joint" type="fixed">
-    <parent link="wrist_camera_frame"/>
-    <child link="wrist_camera_optical_frame"/>
-    <origin xyz="0 0 0" rpy="${wrist_camera_optical_rpy}"/>
-  </joint>
+    <joint name="wrist_camera_optical_joint" type="fixed">
+      <parent link="wrist_camera_frame"/>
+      <child link="wrist_camera_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${wrist_camera_optical_rpy}"/>
+    </joint>
+  </xacro:if>
 
 
   <joint name="gripper_joint" type="revolute">
@@ -491,7 +496,6 @@
         <param name="communication_timeout_ms">100</param>
         <param name="use_sync_write">$(arg use_sync_write)</param>
         <param name="enable_mock_mode">$(arg use_mock)</param>
-        <param name="max_velocity_steps">${sts_max_velocity_steps}</param>
         <param name="reset_states_on_activate">true</param>
       </xacro:if>
     </hardware>
@@ -501,6 +505,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${shoulder_pan_lower}</param>
       <param name="max_position">${shoulder_pan_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -532,6 +538,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${shoulder_lift_lower}</param>
       <param name="max_position">${shoulder_lift_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -563,6 +571,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${elbow_flex_lower}</param>
       <param name="max_position">${elbow_flex_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -594,6 +604,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${wrist_flex_lower}</param>
       <param name="max_position">${wrist_flex_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -625,6 +637,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${wrist_roll_lower}</param>
       <param name="max_position">${wrist_roll_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -656,6 +670,8 @@
       <param name="operating_mode">$(arg gripper_operating_mode)</param>
       <param name="min_position">${gripper_lower}</param>
       <param name="max_position">${gripper_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>

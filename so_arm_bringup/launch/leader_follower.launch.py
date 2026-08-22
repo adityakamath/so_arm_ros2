@@ -48,6 +48,9 @@ def generate_launch_description():
     pkg_bringup = FindPackageShare('so_arm_bringup')
     control_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'control.launch.py'])
     teleop_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'teleop.launch.py'])
+    record_replay_launch = PathJoinSubstitution(
+        [pkg_bringup, 'launch', 'record_replay.launch.py']
+    )
     follower_teleop_config = PathJoinSubstitution(
         [pkg_bringup, 'config', 'follower_teleop.yaml']
     )
@@ -56,8 +59,9 @@ def generate_launch_description():
     leader_control_overrides = {'frame_prefix': 'leader/'}
     # follower gets its own bool_toggle_node/joint_state_switch_node instead, below
     follower_control_overrides = {'frame_prefix': 'follower/'}
-    leader_teleop_overrides = {
-        **_load_launch_arg_overrides('leader_teleop.yaml'), 'replay_loops': replay_loops,
+    leader_teleop_overrides = _load_launch_arg_overrides('leader_teleop.yaml')
+    leader_record_replay_overrides = {
+        **_load_launch_arg_overrides('leader_record_replay.yaml'), 'replay_loops': replay_loops,
     }
 
     leader_group = GroupAction([
@@ -76,13 +80,22 @@ def generate_launch_description():
         ),
     ])
 
-    # Top-level (not nested in leader_group), still pushed into /leader: records from the leader,
-    # but playback output is redirected to the follower's joint_state_switch_node below.
+    # Top-level (not nested in leader_group), still pushed into /leader.
     leader_teleop_group = GroupAction([
         PushRosNamespace('leader'),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(teleop_launch),
             launch_arguments=leader_teleop_overrides.items(),
+        ),
+    ])
+
+    # Also top-level, pushed into /leader: records from the leader, but playback output is
+    # redirected to the follower's joint_state_switch_node below.
+    leader_record_replay_group = GroupAction([
+        PushRosNamespace('leader'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(record_replay_launch),
+            launch_arguments=leader_record_replay_overrides.items(),
         ),
     ])
 
@@ -166,7 +179,7 @@ def generate_launch_description():
             'replay_loops', default_value='',
             description=(
                 "Override the leader's record_replay_node replay_loops (0 = loop forever, "
-                'N>0 = exactly N total passes); empty uses leader_teleop.yaml/yaml value.'
+                'N>0 = exactly N total passes); empty uses leader_record_replay.yaml value.'
             ),
         ),
     ]
@@ -175,5 +188,6 @@ def generate_launch_description():
         *declared_arguments,
         leader_group,
         leader_teleop_group,
+        leader_record_replay_group,
         TimerAction(period=FOLLOWER_STAGGER_PERIOD, actions=[follower_group]),
     ])

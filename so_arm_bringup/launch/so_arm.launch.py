@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Single-arm SO-ARM bringup: composes so_arm_control's control.launch.py and
-teleop.launch.py - what control.launch.py itself used to do via its launch_teleop arg,
-before that composition moved here.
-"""
+"""Single-arm SO-ARM bringup: composes so_arm_control's control.launch.py + teleop.launch.py
+with so_arm_bringup's own record_replay.launch.py and (wrist_camera:=true + real hardware
+only) wrist_camera.launch.py. wrist_camera_urdf separately gates the URDF-side mount/links."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 
 from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS
@@ -22,10 +22,19 @@ def generate_launch_description():
     mujoco_headless = LaunchConfiguration('mujoco_headless')
     frame_prefix = LaunchConfiguration('frame_prefix')
     replay_loops = LaunchConfiguration('replay_loops')
+    wrist_camera = LaunchConfiguration('wrist_camera')
+    wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf')
 
     pkg_ctrl = FindPackageShare('so_arm_control')
+    pkg_bringup = FindPackageShare('so_arm_bringup')
     control_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'control.launch.py'])
     teleop_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'teleop.launch.py'])
+    record_replay_launch = PathJoinSubstitution(
+        [pkg_bringup, 'launch', 'record_replay.launch.py']
+    )
+    wrist_camera_launch = PathJoinSubstitution(
+        [pkg_bringup, 'launch', 'wrist_camera.launch.py']
+    )
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -66,6 +75,21 @@ def generate_launch_description():
                 'N total passes); empty uses yaml value.'
             ),
         ),
+        DeclareLaunchArgument(
+            'wrist_camera', default_value='true',
+            description=(
+                'Launch wrist_camera_node (real hardware only). Set false if this arm has no '
+                'wrist camera fitted, to skip it entirely rather than rely on its own '
+                'no-camera-detected graceful exit.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'wrist_camera_urdf', default_value='true',
+            description=(
+                'so101 only: false omits the wrist camera mount/links/joints from '
+                'robot_description entirely (independent of the wrist_camera arg above).'
+            ),
+        ),
     ]
 
     control = IncludeLaunchDescription(
@@ -78,11 +102,25 @@ def generate_launch_description():
             'ros2_control_hardware_type': ros2_control_hardware_type,
             'mujoco_headless': mujoco_headless,
             'frame_prefix': frame_prefix,
+            'wrist_camera_urdf': wrist_camera_urdf,
         }.items(),
     )
     teleop = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(teleop_launch),
+    )
+    record_replay = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(record_replay_launch),
         launch_arguments={'replay_loops': replay_loops}.items(),
     )
+    # Gated here, not in control.launch.py (a camera isn't control) - mock/mujoco has no camera.
+    wrist_camera_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(wrist_camera_launch),
+        condition=IfCondition(PythonExpression([
+            "'", wrist_camera, "' == 'true' and '",
+            ros2_control_hardware_type, "' == 'real'",
+        ])),
+    )
 
-    return LaunchDescription([*declared_arguments, control, teleop])
+    return LaunchDescription([
+        *declared_arguments, control, teleop, record_replay, wrist_camera_node,
+    ])

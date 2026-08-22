@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
-"""
-launch_testing integration test for so_arm.launch.py - the composed control+teleop stack.
-
-Uses use_mock:=true (sts_hardware_interface's own enable_mock_mode) against the default
-ros2_control_hardware_type:=real, so this exercises the actual hardware plugin without a
-real serial port or real servos. Requires sts_hardware_interface to be built.
-
-so_arm_control's own test_control_launch.py already covers the control-only path
-(robot_state_publisher/controller_manager/joint_trajectory_bridge) in isolation; this file
-only covers what's specific to the composition - that teleop.launch.py actually comes up
-alongside control.launch.py, and the record/replay round trip against the real filesystem.
-"""
+"""launch_testing integration test for so_arm.launch.py, the composed control+teleop stack -
+uses use_mock:=true against ros2_control_hardware_type:=real (requires sts_hardware_interface
+built). Covers the composition itself and the record/replay filesystem round trip."""
 
 import itertools
 import os
@@ -29,11 +20,10 @@ import pytest
 import rclpy
 from std_srvs.srv import SetBool, Trigger
 
-# so_arm.launch.py doesn't expose a recordings_dir launch argument (it's hardcoded in
-# so_arm_control's teleop.yaml), so this test writes into the real recordings dir - clean up
-# whatever new bag directories appear during the test, below.
-_WS_ROOT = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_control')))
-_REAL_RECORDINGS_DIR = os.path.join(_WS_ROOT, 'src', 'so_arm_ros2', 'so_arm_control', 'recordings')
+# recordings_dir isn't exposed as a launch arg, so this writes into the real recordings dir -
+# clean up whatever new bag directories appear, below.
+_WS_ROOT = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_bringup')))
+_REAL_RECORDINGS_DIR = os.path.join(_WS_ROOT, 'src', 'so_arm_ros2', 'so_arm_bringup', 'recordings')
 
 _name_counter = itertools.count()
 
@@ -45,7 +35,11 @@ def generate_test_description():
     ])
     so_arm = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(so_arm_launch),
-        launch_arguments={'model': 'so101', 'use_mock': 'true'}.items(),
+        # wrist_camera:=false - no camera hardware in CI; this test covers the record/replay +
+        # teleop composition, not the camera.
+        launch_arguments={
+            'model': 'so101', 'use_mock': 'true', 'wrist_camera': 'false',
+        }.items(),
     )
     return launch.LaunchDescription([
         so_arm,
@@ -132,11 +126,8 @@ class TestRecordingIntegration(unittest.TestCase):
 class TestProcessExit(unittest.TestCase):
 
     def test_exit_codes(self, proc_info):
-        # -2 (SIGINT): the test framework's own shutdown signal - so_arm_control's Python
-        # nodes catch it and exit 0, but joy_teleop (not this package's code) exits with the
-        # raw signal code, which is still a clean shutdown, not a crash. See
-        # so_arm_control/test/test_teleop_launch.py's own TestProcessExit for the same quirk
-        # (including a jazzy-specific exit(1) case) in more detail.
+        # -2 (SIGINT): this stack's own nodes catch it and exit 0 via spin_and_shutdown, but
+        # joy_teleop exits with the raw signal - see test_teleop_launch.py for the same quirk.
         for info in proc_info:
             allowable = [0, -2, 1] if 'joy_teleop' in info.process_name else [0, -2]
             self.assertIn(

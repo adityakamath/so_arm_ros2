@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Owns the rosbag2_py SequentialWriter lifecycle for a fixed set of raw-passthrough topics.
-
-No ROS Node dependency - the caller supplies raw CDR bytes and a timestamp per write() call,
-so this is directly unit-testable without a live node.
-"""
+No ROS Node dependency - the caller supplies raw CDR bytes and a timestamp per write() call."""
 
 from datetime import datetime
 import os

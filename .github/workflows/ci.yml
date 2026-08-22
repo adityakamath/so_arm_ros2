@@ -41,11 +41,12 @@ jobs:
       - name: Install ROS dependencies
         run: |
           apt-get update && apt-get install -y --no-install-recommends \
-            python3-pip python3-yaml python3-numpy git libfcl-dev \
+            python3-pip python3-yaml python3-numpy python3-opencv git libfcl-dev \
             ros-${{ matrix.ros_distro }}-ament-index-python \
             ros-${{ matrix.ros_distro }}-control-msgs \
             ros-${{ matrix.ros_distro }}-controller-manager \
             ros-${{ matrix.ros_distro }}-controller-manager-msgs \
+            ros-${{ matrix.ros_distro }}-cv-bridge \
             ros-${{ matrix.ros_distro }}-diagnostic-msgs \
             ros-${{ matrix.ros_distro }}-effort-controllers \
             ros-${{ matrix.ros_distro }}-hardware-interface \
@@ -111,13 +112,19 @@ jobs:
           exit $FAILED
 
       - name: pytest (so_arm_bringup)
-        # No pinocchio/fcl here either, so unlike so_arm_control this is a single ordinary
-        # pytest run across the whole directory.
+        # Same numpy ABI conflict class as so_arm_control's step - one pytest invocation PER
+        # FILE, so cv2 (test_opencv_camera_node.py) can't contaminate the others. See conftest.py.
         run: |
           . /opt/ros/${{ matrix.ros_distro }}/setup.sh
           . install/setup.sh
           cd src/so_arm_ros2/so_arm_bringup/test
-          pytest .
+          FAILED=0
+          for f in test_*.py; do
+            echo "::group::pytest $f"
+            pytest "$f" || FAILED=1
+            echo "::endgroup::"
+          done
+          exit $FAILED
 
       - name: pytest (so_arm_description)
         # No pinocchio/fcl here, so unlike so_arm_control this is a single ordinary pytest run.

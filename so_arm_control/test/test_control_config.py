@@ -183,49 +183,8 @@ class TestTeleopYaml:
         assert ik_rate == update_rate
 
 
-# ── record_replay.yaml ─────────────────────────────────────────────────────────
-
-class TestRecordReplayYaml:
-
-    def setup_method(self):
-        self.cfg = _load('teleop.yaml')
-        self.params = self.cfg['record_replay_node']['ros__parameters']
-
-    def test_required_keys_present(self):
-        for key in ('recordings_dir', 'joint_states_topic', 'dynamic_joint_states_topic',
-                    'tf_topic', 'estop_status_topic', 'output_topic', 'joint_names',
-                    'publish_rate', 'replay_loops', 'gripper_joint', 'gripper_action_name'):
-            assert key in self.params, f"Missing key '{key}' in record_replay.yaml"
-
-    def test_topics_are_relative_for_namespace_support(self):
-        for key in ('joint_states_topic', 'dynamic_joint_states_topic', 'tf_topic',
-                    'estop_status_topic', 'output_topic'):
-            assert not self.params[key].startswith('/'), f"'{key}' must not be absolute"
-
-    def test_topics_match_joint_state_broadcaster_output(self):
-        assert self.params['joint_states_topic'] == 'joint_states'
-        assert self.params['dynamic_joint_states_topic'] == 'dynamic_joint_states'
-
-    def test_estop_status_topic_matches_bool_toggle_publish(self):
-        """Must match bool_toggle_node's emergency_stop.publish_status_topic (teleop.yaml)."""
-        toggle_params = self.cfg['bool_toggle_node']['ros__parameters']
-        assert self.params['estop_status_topic'] == toggle_params['emergency_stop']['publish_status_topic']
-
-    def test_joint_names_exclude_gripper(self):
-        """Gripper goes through the gripper_controller action, not joint_commands_replay."""
-        names = self.params['joint_names']
-        assert isinstance(names, list) and len(names) == 5
-        assert 'gripper_joint' not in names
-
-    def test_output_topic_matches_switch_input(self):
-        teleop_cfg = _load('teleop.yaml')
-        switch_topic = teleop_cfg['joint_state_switch_node']['ros__parameters']['replay.topic']
-        assert self.params['output_topic'] == switch_topic
-
-    def test_publish_rate_matches_control_yaml_update_rate(self):
-        control_cfg = _load('control.yaml')
-        update_rate = control_cfg['controller_manager']['ros__parameters']['update_rate']
-        assert self.params['publish_rate'] == update_rate
+# record_replay.yaml moved to so_arm_bringup along with record_replay_node itself - see
+# so_arm_bringup/test/test_bringup_config.py's TestRecordReplayYaml.
 
 
 # ── launch argument surface ───────────────────────────────────────────────────
@@ -248,14 +207,12 @@ class TestControlLaunchArgs:
 
 
 class TestTeleopLaunchArgs:
-    EXPECTED_ARGS = [
-        'recordings_dir', 'record_replay_output_topic', 'record_replay_gripper_action_name',
-        'record_replay_estop_status_topic', 'replay_loops', 'frame_prefix',
-    ]
+    EXPECTED_ARGS = ['frame_prefix']
 
     def test_expected_args_declared(self):
-        """teleop.launch.py loads teleop.yaml directly, plus these override/leader-follower
-        args - see control.launch.py's own frame_prefix for the matching control-side arg."""
+        """teleop.launch.py loads teleop.yaml directly, plus this leader-follower override arg -
+        see control.launch.py's own frame_prefix for the matching control-side arg. record/replay
+        args moved to so_arm_bringup's record_replay.launch.py along with record_replay_node."""
         output = _show_arguments('so_arm_control', 'teleop.launch.py')
         for arg in self.EXPECTED_ARGS:
             assert arg in output, f"Expected argument '{arg}' not in teleop.launch.py"

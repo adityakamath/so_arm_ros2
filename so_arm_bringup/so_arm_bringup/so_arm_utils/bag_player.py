@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-"""Loads a recorded joint_states bag and drives timed playback through it.
-
-No ROS Node dependency - timestamps ('now') are passed in by the caller (typically
-time.monotonic()) rather than read from a clock, so this is directly unit-testable without a
-live node/timer. Used by record_replay_node, the sole owner of '/replay'.
-"""
+"""Loads a recorded joint_states bag and drives timed playback through it. No ROS Node
+dependency - timestamps ('now') are passed in by the caller rather than read from a clock."""
 
 import os
 
@@ -94,13 +90,8 @@ class BagPlayer:
         self.completed = True
 
     def advance(self, now: float) -> tuple[JointState, bool, bool] | None:
-        """
-        Advance playback to `now`.
-
-        Returns (sample, looped, finished), or None if nothing is loaded/running. `looped` is
-        True on the tick where playback wraps back to the start; `finished` is True on the tick
-        where the configured replay_loops count is reached (finish() has already been applied).
-        """
+        """Advance playback to `now`. Returns (sample, looped, finished) - `looped` true on the
+        wrap-to-start tick, `finished` true once replay_loops is reached - or None if idle."""
         if not self.is_running:
             return None
 

@@ -4,7 +4,7 @@ round trip (tmp_path keeps it isolated) since that's the whole point of this cla
 
 import os
 
-from so_arm_control.so_arm_utils.bag_recorder import BagRecorder
+from so_arm_bringup.so_arm_utils.bag_recorder import BagRecorder
 
 _TOPICS = [
     (0, '/joint_states', 'sensor_msgs/msg/JointState'),

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""SO-ARM teleop stack: joystick/GUI IK teleop, gripper teleop, record/replay."""
+"""SO-ARM teleop stack: joystick/GUI IK teleop, gripper teleop.
+
+Record/replay moved to so_arm_bringup's own record_replay.launch.py - it neither controls nor
+calibrates the robot, unlike everything else launched here.
+"""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -9,29 +13,10 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def launch_setup(context):
-    recordings_dir = LaunchConfiguration('recordings_dir').perform(context).strip()
-    rr_output_topic = LaunchConfiguration('record_replay_output_topic').perform(context).strip()
-    rr_gripper_action = LaunchConfiguration(
-        'record_replay_gripper_action_name').perform(context).strip()
-    rr_estop_topic = LaunchConfiguration(
-        'record_replay_estop_status_topic').perform(context).strip()
-    replay_loops = LaunchConfiguration('replay_loops').perform(context).strip()
     frame_prefix = LaunchConfiguration('frame_prefix').perform(context).strip()
 
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
     config = f'{pkg_ctrl}/config/teleop.yaml'
-
-    record_replay_overrides = {}
-    if recordings_dir:
-        record_replay_overrides['recordings_dir'] = recordings_dir
-    if rr_output_topic:
-        record_replay_overrides['output_topic'] = rr_output_topic
-    if rr_gripper_action:
-        record_replay_overrides['gripper_action_name'] = rr_gripper_action
-    if rr_estop_topic:
-        record_replay_overrides['estop_status_topic'] = rr_estop_topic
-    if replay_loops:
-        record_replay_overrides['replay_loops'] = int(replay_loops)
 
     # Under leader_follower.launch.py, robot_state_publisher publishes TF frames under this
     # same prefix (see control.launch.py) - these nodes' frame params must match, or TF
@@ -95,44 +80,11 @@ def launch_setup(context):
             output='screen',
             parameters=[config],
         ),
-        Node(
-            package='so_arm_control',
-            executable='record_replay_node',
-            name='record_replay_node',
-            output='screen',
-            parameters=[config, record_replay_overrides],
-        ),
     ]
 
 
 def generate_launch_description():
     declared_arguments = [
-        DeclareLaunchArgument(
-            'recordings_dir',
-            default_value='',
-            description="Override record_replay_node's recordings_dir; empty uses yaml value.",
-        ),
-        DeclareLaunchArgument(
-            'record_replay_output_topic', default_value='',
-            description="Override record_replay_node's output_topic; empty uses yaml value.",
-        ),
-        DeclareLaunchArgument(
-            'record_replay_gripper_action_name', default_value='',
-            description="Override record_replay_node's gripper_action_name; empty uses yaml value.",
-        ),
-        DeclareLaunchArgument(
-            'record_replay_estop_status_topic', default_value='',
-            description=(
-                "Override record_replay_node's estop_status_topic; empty uses yaml value."
-            ),
-        ),
-        DeclareLaunchArgument(
-            'replay_loops', default_value='',
-            description=(
-                "Override record_replay_node's replay_loops (0 = loop forever, N>0 = exactly "
-                'N total passes); empty uses yaml value.'
-            ),
-        ),
         DeclareLaunchArgument(
             'frame_prefix', default_value='',
             description=(

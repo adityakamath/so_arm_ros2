@@ -350,7 +350,6 @@
         <param name="communication_timeout_ms">100</param>
         <param name="use_sync_write">$(arg use_sync_write)</param>
         <param name="enable_mock_mode">$(arg use_mock)</param>
-        <param name="max_velocity_steps">${sts_max_velocity_steps}</param>
         <param name="reset_states_on_activate">true</param>
       </xacro:if>
     </hardware>
@@ -360,6 +359,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${shoulder_pan_lower}</param>
       <param name="max_position">${shoulder_pan_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -391,6 +392,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${shoulder_lift_lower}</param>
       <param name="max_position">${shoulder_lift_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -422,6 +425,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${elbow_flex_lower}</param>
       <param name="max_position">${elbow_flex_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -453,6 +458,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${wrist_flex_lower}</param>
       <param name="max_position">${wrist_flex_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -484,6 +491,8 @@
       <param name="operating_mode">$(arg arm_operating_mode)</param>
       <param name="min_position">${wrist_roll_lower}</param>
       <param name="max_position">${wrist_roll_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>
@@ -515,6 +524,8 @@
       <param name="operating_mode">$(arg gripper_operating_mode)</param>
       <param name="min_position">${gripper_lower}</param>
       <param name="max_position">${gripper_upper}</param>
+      <!-- Motor-specific, model-dependent parameter (per joint so different STS models can share this bus) -->
+      <param name="max_velocity_steps">${sts_protocol_max_vel_steps}</param>
       <param name="max_velocity">${max_velocity_rads}</param>
       <param name="position_center_steps">2048</param>
       <param name="p_coefficient">${p_coefficient}</param>

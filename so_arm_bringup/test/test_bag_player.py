@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
-"""
-Unit tests for BagPlayer - no ROS node needed.
-
-TestLoadLatest exercises the real rosbag2_py mcap round trip (tmp_path keeps it isolated).
-TestAdvance/TestStartPauseResume/TestArmAbortFinish exercise the pure timing/looping state
-machine directly with synthetic (offset, JointState) samples and hand-picked 'now' values -
-this is the trickiest logic in record_replay_node and was previously only reachable through
-node-level doubles poking at private attributes (see test_record_replay_node.py's history).
-"""
+"""Unit tests for BagPlayer - no ROS node needed. TestLoadLatest exercises the real rosbag2_py
+mcap round trip; the rest exercise the timing/looping state machine directly with synthetic
+(offset, JointState) samples and hand-picked 'now' values."""
 
 import pytest
 from rclpy.serialization import serialize_message
 import rosbag2_py
 from sensor_msgs.msg import JointState
-from so_arm_control.so_arm_utils.bag_player import BagPlayer
+from so_arm_bringup.so_arm_utils.bag_player import BagPlayer
 
 _JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint']
 

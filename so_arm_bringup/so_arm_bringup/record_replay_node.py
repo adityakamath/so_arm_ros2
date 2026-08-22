@@ -12,8 +12,8 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
-from so_arm_control.so_arm_utils.bag_player import BagPlayer
-from so_arm_control.so_arm_utils.bag_recorder import BagRecorder
+from so_arm_bringup.so_arm_utils.bag_player import BagPlayer
+from so_arm_bringup.so_arm_utils.bag_recorder import BagRecorder
 from so_arm_control.so_arm_utils.params import require_parameter
 from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown
@@ -23,24 +23,13 @@ from tf2_msgs.msg import TFMessage
 
 
 def _resolve_package_uri(value: str) -> str:
-    """Resolve a 'package://' or 'src://' value to a real path via ament_index.
-
-    'package://<pkg>/<subpath>' lands in that package's *install-space* share directory -
-    stable regardless of whether --symlink-install works (it doesn't, in this workspace's
-    colcon setup), since ament_index's resource files point at the install prefix either way.
-
-    'src://<repo>/<subpath>' lands in the workspace's *source* tree instead - derived from
-    so_arm_control's own install prefix (<ws>/install/so_arm_control), independent of both CWD
-    and --symlink-install, assuming the standard colcon <ws>/src, <ws>/install layout.
-
-    Values that aren't one of these schemes are returned unchanged (absolute/relative
-    overrides still work).
-    """
+    """Resolve 'package://<pkg>/<subpath>' to that package's install-space share dir, or
+    'src://<repo>/<subpath>' to the workspace's source tree; anything else is unchanged."""
     if value.startswith('package://'):
         pkg, _, subpath = value.removeprefix('package://').partition('/')
         return os.path.join(get_package_share_directory(pkg), subpath)
     if value.startswith('src://'):
-        ws_root = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_control')))
+        ws_root = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_bringup')))
         return os.path.join(ws_root, 'src', value.removeprefix('src://'))
     return value
 
@@ -53,7 +42,7 @@ class RecordReplayNode(Node):
 
         # src:// resolves via ament_index (see _resolve_package_uri) - stable regardless of
         # CWD or username, unlike a bare relative/absolute path.
-        self.declare_parameter('recordings_dir', 'src://so_arm_ros2/so_arm_control/recordings')
+        self.declare_parameter('recordings_dir', 'src://so_arm_ros2/so_arm_bringup/recordings')
         self.declare_parameter('joint_states_topic', 'joint_states')
         self.declare_parameter('dynamic_joint_states_topic', 'dynamic_joint_states')
         self.declare_parameter('tf_topic', 'tf')
@@ -172,10 +161,8 @@ class RecordReplayNode(Node):
                 response.success = True
                 response.message = f"Already recording to '{self._recorder.bag_dir}'"
                 return response
-            # Deliberately allowed while e-stop is engaged: hand-guiding (backdriving) the arm
-            # for kinesthetic teaching requires torque off, i.e. e-stop active, during the
-            # recording itself. /replay stays gated on e-stop below - torque's off, so replayed
-            # commands wouldn't move the arm anyway.
+            # Deliberately allowed during e-stop: kinesthetic teaching needs torque off to
+            # hand-guide the arm. /replay stays gated on e-stop below.
             if self._playback.segment_start_wall is not None:
                 response.success = False
                 response.message = 'Cannot start recording: a replay is in progress'
@@ -183,7 +170,10 @@ class RecordReplayNode(Node):
             ok, message = self._recorder.start()
             response.success = ok
             response.message = message
-            (self.get_logger().info if ok else self.get_logger().error)(message)
+            if ok:
+                self.get_logger().info(message)
+            else:
+                self.get_logger().error(message)
             if ok:
                 self._record_active_pub.publish(Bool(data=True))
             return response

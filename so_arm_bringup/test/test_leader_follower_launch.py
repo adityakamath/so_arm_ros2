@@ -98,9 +98,9 @@ class TestDeclaredArgs:
 
 class TestNamespacing:
 
-    def test_exactly_three_groups(self, built):
+    def test_exactly_four_groups(self, built):
         ld, _ = built
-        assert len(_groups(ld)) == 3
+        assert len(_groups(ld)) == 4
 
     def test_group_namespaces_are_leader_and_follower(self, built):
         ld, ctx = built
@@ -154,6 +154,46 @@ class TestLeaderGroup:
             if 'teleop.launch.py' in i.launch_description_source.location
         ]
         assert len(teleop_includes) == 1
+
+
+class TestLeaderRecordReplayGroup:
+
+    def _leader_record_replay_group(self, built):
+        ld, ctx = built
+        for g in _groups(ld):
+            if _namespace_of(g, ctx) == 'leader' and _includes_of(g) and \
+                    'record_replay.launch.py' in _includes_of(g)[0].launch_description_source.location:
+                return g
+        raise AssertionError('no leader record_replay group found')
+
+    def _record_replay_include(self, built):
+        return _include_of(self._leader_record_replay_group(built), 'record_replay.launch.py')
+
+    def test_output_topic_redirected_to_follower(self, built):
+        """Leader records; playback is redirected to the follower - see leader_record_replay.yaml."""
+        _, ctx = built
+        args = _launch_args_of(self._record_replay_include(built), ctx)
+        assert args['record_replay_output_topic'] == '/follower/joint_commands_replay'
+
+    def test_gripper_action_redirected_to_follower(self, built):
+        _, ctx = built
+        args = _launch_args_of(self._record_replay_include(built), ctx)
+        assert args['record_replay_gripper_action_name'] == \
+            '/follower/gripper_controller/gripper_cmd'
+
+    def test_estop_status_topic_redirected_to_follower(self, built):
+        """Replay is gated by the arm it's actually driving, not the arm recording it."""
+        _, ctx = built
+        args = _launch_args_of(self._record_replay_include(built), ctx)
+        assert args['record_replay_estop_status_topic'] == '/follower/emergency_stop_active'
+
+    def test_record_replay_launch_included_once(self, built):
+        group = self._leader_record_replay_group(built)
+        includes = [
+            i for i in _includes_of(group)
+            if 'record_replay.launch.py' in i.launch_description_source.location
+        ]
+        assert len(includes) == 1
 
 
 class TestFollowerTracksLeader:

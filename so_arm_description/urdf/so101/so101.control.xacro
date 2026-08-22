@@ -17,11 +17,12 @@
   <xacro:property name="arm_operating_mode" value="0"/>     <!-- Arm joints 1-5: 0=Position, 1=Velocity, 2=PWM/Effort -->
   <xacro:property name="gripper_operating_mode" value="0"/> <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
 
-  <!-- Motor-specific parameter (STS3215 default) -->
-  <xacro:property name="sts_max_velocity_steps" value="65535"/>  <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
+  <!-- Motor-specific, model-dependent parameter (written to every joint below so different
+       STS models could share this bus) -->
+  <xacro:property name="sts_protocol_max_vel_steps" value="65535"/>  <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
 
   <!-- Maximum allowable torque/velocity for each motor -->
-  <xacro:property name="max_velocity_steps" value="${sts_max_velocity_steps}"/>  <!-- full hardware max -->
+  <xacro:property name="max_velocity_steps" value="${sts_protocol_max_vel_steps}"/>  <!-- full hardware max -->
   <xacro:property name="max_velocity_rads" value="${max_velocity_steps*2*pi/4096}"/>  <!-- rad/s -->
   <xacro:property name="max_torque_nm" value="2.942"/>  <!-- N⋅m (30 kgf⋅cm for STS3215) -->
 

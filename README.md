@@ -18,8 +18,8 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 
 ## Packages
 
-- **so_arm_control** — ros2_control hardware interfaces and controller configs, IK teleop / record-replay / gripper-teleop nodes, self-collision-checked trajectory bridge, and the control-only and teleop-only launch files (real hardware or MuJoCo). Self-contained and launchable on its own.
-- **so_arm_bringup** — top-level orchestration: `so_arm.launch.py` composes so_arm_control's control and teleop stacks for a single arm, `leader_follower.launch.py` composes two of them into a dual-arm leader-follower rig.
+- **so_arm_control** — ros2_control hardware interfaces and controller configs, IK teleop / gripper-teleop nodes, self-collision-checked trajectory bridge, and the control-only and teleop-only launch files (real hardware or MuJoCo). Self-contained and launchable on its own.
+- **so_arm_bringup** — top-level orchestration: `so_arm.launch.py` composes so_arm_control's control and teleop stacks for a single arm plus teach-and-repeat record/replay and an optional wrist camera (SO101 only); `leader_follower.launch.py` composes two of them into a dual-arm leader-follower rig.
 - **so_arm_description** — URDF and MJCF robot models and meshes for SO100 and SO101.
 
 ### Dependencies
@@ -31,6 +31,8 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 - **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
 - **[joy](https://github.com/ros-drivers/joystick_drivers)** / **[joy_teleop](https://index.ros.org/p/joy_teleop/)**: Joystick teleoperation
 - **[mujoco_ros2_control](https://github.com/ros-controls/mujoco_ros2_control)** (`sudo apt install ros-kilted-mujoco-ros2-control`): MuJoCo simulation backend, `ros2_control_hardware_type:=mujoco` only
+- **OpenCV** (`python3-opencv`) + **cv_bridge**: wrist camera driver (`so_arm_bringup`'s `opencv_camera_node`), SO101 + `wrist_camera:=true` only
+- **[rosbag2](https://github.com/ros2/rosbag2)** with the **mcap** storage plugin (`ros-kilted-rosbag2-storage-mcap`): teach-and-repeat record/replay
 
 ## Installation and Usage
 
@@ -55,6 +57,8 @@ automatically disables self-collision checking instead of crashing. Install depe
 
 No real servos yet? `ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true` brings up the full stack with `sts_hardware_interface`'s own mock mode (servo I/O faked internally) instead - still needs the submodule built, but no serial port or real hardware required.
 
+No wrist camera fitted? Leave `wrist_camera` at its `true` default - the driver detects the missing camera, logs a warning, and exits cleanly instead of crashing; set `wrist_camera:=false` to skip it entirely.
+
 `so_arm.launch.py` composes so_arm_control's `control.launch.py` and `teleop.launch.py` for you. To run just one - e.g. control only, or to restart teleop without restarting the control stack - launch them separately instead:
 
 ```bash
@@ -77,7 +81,7 @@ to `/etc/udev/rules.d/`, then `sudo udevadm control --reload-rules && sudo udeva
 
 ## Launch Arguments
 
-The most commonly used arguments for `so_arm_bringup so_arm.launch.py` (same names as `so_arm_control control.launch.py`, which it wraps - run with `--show-arguments` for the full list):
+The most commonly used arguments for `so_arm_bringup so_arm.launch.py` (`model` through `use_sim_time` share names with `so_arm_control control.launch.py`, which it wraps - run with `--show-arguments` for the full list):
 
 | Argument                    | Default | Description                                                            |
 |------------------------------|---------|--------------------------------------------------------------------------|
@@ -86,6 +90,9 @@ The most commonly used arguments for `so_arm_bringup so_arm.launch.py` (same nam
 | `use_mock`                   | `""`    | `sts_hardware_interface`'s own mock mode (`true`/`false`); needs it built |
 | `ros2_control_hardware_type` | `real`  | `real` for the STS hardware plugin, `mujoco` for MuJoCo simulation                        |
 | `use_sim_time`                | `false` | Use `/clock` from a simulator instead of system time                     |
+| `wrist_camera`                | `true`  | Launch the wrist camera driver (real hardware only). No camera detected → logs a warning and exits cleanly instead of crashing; set `false` if this arm has none fitted |
+| `wrist_camera_urdf`           | `true`  | SO101 only: `false` omits the wrist camera mount/links/joints from `robot_description` entirely, independent of the `wrist_camera` arg above |
+| `replay_loops`                | `""`    | Override record/replay's `replay_loops` (`0` = loop forever, `N>0` = exactly `N` passes); empty uses the yaml default |
 
 `teleop.launch.py` takes no launch arguments — it loads `so_arm_control/config/teleop.yaml` directly. `so_arm_bringup leader_follower.launch.py` has its own `leader_*`/`follower_*`-prefixed argument set for dual-arm setups; see `--show-arguments`.
 
@@ -127,15 +134,18 @@ gradually.
 
 ```text
 so_arm_ros2/
-├── so_arm_control/          # ros2_control config, teleop/record-replay/gripper nodes, launch files
+├── so_arm_control/          # ros2_control config, teleop/gripper nodes, launch files
 │   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml
 │   ├── launch/                # control.launch.py, teleop.launch.py - control-only and teleop-only
 │   └── so_arm_control/
 │       ├── scripts/            # generate_srdf utility
-│       └── so_arm_utils/       # Shared IK, collision-resolution, bag record/replay, QoS helpers
-├── so_arm_bringup/          # Top-level orchestration launch files
-│   ├── config/               # leader_teleop.yaml, follower_teleop.yaml
-│   └── launch/                # so_arm.launch.py (single arm), leader_follower.launch.py (dual arm)
+│       └── so_arm_utils/       # Shared IK, collision-resolution, QoS helpers
+├── so_arm_bringup/          # Top-level orchestration, record/replay, wrist camera
+│   ├── config/               # leader_teleop.yaml, follower_teleop.yaml, record_replay.yaml, wrist_camera.yaml
+│   ├── launch/                # so_arm.launch.py (single arm), leader_follower.launch.py (dual arm), record_replay.launch.py, wrist_camera.launch.py
+│   └── so_arm_bringup/
+│       ├── record_replay_node.py, opencv_camera_node.py
+│       └── so_arm_utils/       # BagRecorder/BagPlayer (mcap round trip)
 ├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
 └── modules/
     └── sts_hardware_interface/  # Feetech STS servo hardware interface (git submodule, uninitialized unless needed)

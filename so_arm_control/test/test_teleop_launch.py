@@ -19,7 +19,6 @@ graceful-failure-when-target-missing, external-sync) is already covered there in
 """
 
 import itertools
-import tempfile
 import time
 import unittest
 
@@ -37,19 +36,16 @@ from std_srvs.srv import Trigger
 
 _name_counter = itertools.count()
 
-# record_replay_node (now part of teleop.launch.py) would otherwise write into the real
-# so_arm_ros2/recordings/ - keep test runs out of it, matching test_control_launch.py.
-_TEST_RECORDINGS_DIR = tempfile.mkdtemp(prefix='so_arm_control_teleop_test_recordings_')
-
 
 @pytest.mark.launch_test
 def generate_test_description():
+    # record_replay_node moved to so_arm_bringup's own record_replay.launch.py - teleop.launch.py
+    # no longer writes anywhere on disk, so there's no recordings_dir to isolate here anymore.
     teleop_launch = launch.substitutions.PathJoinSubstitution([
         launch_ros.substitutions.FindPackageShare('so_arm_control'), 'launch', 'teleop.launch.py',
     ])
     teleop = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(teleop_launch),
-        launch_arguments={'recordings_dir': _TEST_RECORDINGS_DIR}.items(),
     )
     return launch.LaunchDescription([
         teleop,

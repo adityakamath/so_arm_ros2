@@ -25,6 +25,7 @@ def launch_setup(context):
     effective_hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     frame_prefix = LaunchConfiguration('frame_prefix').perform(context)
+    wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf').perform(context)
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
@@ -56,6 +57,8 @@ def launch_setup(context):
             f' mujoco_model:={final_mujoco_model}'
             f' mujoco_headless:={mujoco_headless}'
         )
+    if model == 'so101':  # only so101's xacro declares this arg - it's the only wrist camera model
+        xacro_cmd += f' wrist_camera_urdf:={wrist_camera_urdf}'
 
     robot_description = {
         'robot_description': ParameterValue(Command([xacro_cmd]), value_type=str)
@@ -178,6 +181,15 @@ def generate_launch_description():
             description=(
                 'Prefix for all published tf frame_ids (e.g. "leader/"); empty = no prefix, '
                 'the single-arm default.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'wrist_camera_urdf',
+            default_value='true',
+            description=(
+                'so101 only: false omits the wrist camera mount/links/joints from '
+                'robot_description entirely (not just the driver node - see wrist_camera arg '
+                'in so_arm_bringup for that).'
             ),
         ),
     ]
