@@ -11,9 +11,6 @@
     so_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-    gripper_controller:
-      type: parallel_gripper_action_controller/GripperActionController
-
 /**/joint_state_broadcaster:
   ros__parameters:
     joints:
@@ -33,6 +30,7 @@
       - elbow_flex_joint
       - wrist_flex_joint
       - wrist_roll_joint
+      - gripper_joint
     command_interfaces:
       - position
       - velocity
@@ -43,10 +41,6 @@
     allow_partial_joints_goal: true
     # Inert today - teleop_ik_node/GUI sliders always send zero-velocity endpoints.
     allow_nonzero_velocity_at_trajectory_end: true
-
-/**/gripper_controller:
-  ros__parameters:
-    joint: gripper_joint
 
 # Serial ping retry tolerance (real hardware only).
 /**/sts_hardware_interface_node:

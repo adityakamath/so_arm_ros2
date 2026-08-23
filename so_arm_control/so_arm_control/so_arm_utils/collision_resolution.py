@@ -8,7 +8,6 @@ that gates every commanded target before it reaches the real controller.
 
 import math
 
-
 class _NullLogger:
 
     def warning(self, *args, **kwargs) -> None:

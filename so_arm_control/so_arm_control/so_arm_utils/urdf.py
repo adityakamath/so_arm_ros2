@@ -3,7 +3,6 @@
 
 import xml.etree.ElementTree as ElementTree
 
-
 def parse_joint_velocity_and_limits(
     urdf_xml: str, joint_names: list[str] | None,
 ) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:

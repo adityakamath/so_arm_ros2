@@ -47,6 +47,11 @@ def _make_node():
     node._estop_active = False
     node._own_input_name = 'ik'
     node._active_input = 'ik'
+    node._gripper_joint = 'gripper_joint'
+    node._gripper_limit = None
+    node._gripper_raw = None
+    node._current_effort = None
+    node._effort_gain = 0.0
     return node
 
 
@@ -118,5 +123,40 @@ class TestOnTwistIntegration:
         node._on_twist(self._twist(vx=1.0))  # would integrate to ~0.6, past the 0.45 clamp
         distance = sum(c * c for c in node._position) ** 0.5
         assert distance <= 0.45 + 1e-6
+
+
+class TestComputeGripperTarget:
+    """gripper_joint is folded into teleop_ik_node's own output - see _on_timer."""
+
+    def test_no_limit_yet_returns_none(self, node):
+        node._gripper_limit = None
+        node._gripper_raw = 0.5
+        assert node._compute_gripper_target() is None
+
+    def test_no_raw_yet_returns_none(self, node):
+        node._gripper_limit = (-1.0, 1.0)
+        node._gripper_raw = None
+        assert node._compute_gripper_target() is None
+
+    def test_raw_value_remaps_into_limit(self, node):
+        # _compute_gripper_target calls _remap(raw, upper, midpoint) - note lo/hi swapped vs.
+        # the plain _remap contract, so raw=-1.0 (not +1.0) maps to the upper limit here.
+        node._gripper_limit = (-1.0, 1.0)
+        node._gripper_raw = -1.0
+        assert node._compute_gripper_target() == pytest.approx(1.0)
+
+    def test_effort_gain_disabled_by_default_ignores_current_effort(self, node):
+        node._gripper_limit = (-1.0, 1.0)
+        node._gripper_raw = 1.0  # -> target 0.0
+        node._current_effort = 5.0  # would retreat the target if effort_gain were nonzero
+        assert node._compute_gripper_target() == pytest.approx(0.0)
+
+    def test_effort_gain_enabled_retreats_target(self, node):
+        node._gripper_limit = (-1.0, 1.0)
+        node._effort_gain = 0.1
+        node._gripper_raw = 1.0  # -> target 0.0 before the effort-gain retreat below
+        node._current_effort = 5.0
+        # target - effort_gain * current_effort = 0.0 - 0.1*5.0 = -0.5
+        assert node._compute_gripper_target() == pytest.approx(-0.5)
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Node-level unit tests for RecordReplayNode: /record and /replay gating, gripper-goal
-dispatch, and record/replay mutual exclusion. BagRecorder/BagPlayer are tested separately."""
+"""Node-level unit tests for RecordReplayNode: /record and /replay gating and record/replay
+mutual exclusion. BagRecorder/BagPlayer are tested separately."""
 
 import itertools
 import os
@@ -106,7 +106,6 @@ def _make_node():
     node._dynamic_joint_states_topic = '/dynamic_joint_states'
     node._tf_topic = '/tf'
     node._joint_names = list(_JOINT_NAMES)
-    node._gripper_joint = 'gripper_joint'
 
     node._recorder = BagRecorder(node._recordings_dir, [
         (0, node._joint_states_topic, 'sensor_msgs/msg/JointState'),
@@ -114,7 +113,6 @@ def _make_node():
         (2, node._tf_topic, 'tf2_msgs/msg/TFMessage'),
     ])
     node._playback = BagPlayer(replay_loops=1)
-    node._last_gripper_sent = None
 
     node._estop_active = False
 
@@ -129,9 +127,6 @@ def _make_node():
     node._replay_active_pub = types.SimpleNamespace(
         publish=lambda msg: node.replay_active_published.append(msg.data),
     )
-    node._gripper_client = type(
-        'C', (), {'server_is_ready': lambda self: False, 'send_goal_async': lambda self, g: None},
-    )()
     node._self_client = type('C', (), {'service_is_ready': lambda self: False})()
     return node
 
@@ -280,9 +275,9 @@ class TestRecordCallbackGating:
 
 
 class TestOnTimer:
-    """Tests the node's own responsibilities around BagPlayer.advance()'s result: publishing,
-    gripper dispatch, and finish/loop side effects. The timing/looping math itself is
-    BagPlayer's job, tested directly in test_bag_player.py."""
+    """Tests the node's own responsibilities around BagPlayer.advance()'s result: publishing
+    and finish side effects. The timing/looping math itself is BagPlayer's job, tested
+    directly in test_bag_player.py."""
 
     def _load(self, node, samples, replay_loops=1):
         node._playback = BagPlayer(replay_loops=replay_loops)
@@ -313,28 +308,18 @@ class TestOnTimer:
         node._on_timer()
         assert node.published == []
 
-    def test_gripper_goal_sent_on_change(self, node):
-        sent = []
-        node._gripper_client = type('C', (), {
-            'server_is_ready': lambda self: True,
-            'send_goal_async': lambda self, g: sent.append(g),
-        })()
+    def test_gripper_position_forwarded_alongside_arm_joints(self, node):
+        """gripper_joint flows through the same joint_names output as the arm - no separate
+        action dispatch (see so_arm_control's control.yaml: it's one of so_arm_controller's
+        commanded joints now)."""
+        node._joint_names = [*_JOINT_NAMES, 'gripper_joint']
         self._load(node, [
             (0.0, JointState(name=[*_JOINT_NAMES, 'gripper_joint'], position=[0.0, 0.0, 0.3])),
         ])
         node._on_timer()
-        assert len(sent) == 1
-        assert sent[0].command.position[0] == pytest.approx(0.3)
-
-    def test_looping_resets_last_gripper_sent(self, node):
-        node._last_gripper_sent = 0.5
-        self._load(node, [
-            (0.0, JointState(name=[*_JOINT_NAMES, 'gripper_joint'], position=[0.0, 0.0, 0.0])),
-            (0.1, JointState(name=[*_JOINT_NAMES, 'gripper_joint'], position=[0.1, 0.1, 0.1])),
-        ], replay_loops=0)
-        node._playback.segment_start_wall = time.monotonic() - 1.0  # past the end -> loops
-        node._on_timer()
-        assert node._last_gripper_sent is None
+        assert len(node.published) == 1
+        idx = list(node.published[0].name).index('gripper_joint')
+        assert node.published[0].position[idx] == pytest.approx(0.3)
 
     def test_reaching_the_end_finishes_and_deactivates_replay(self, node):
         calls = []

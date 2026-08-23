@@ -18,14 +18,14 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 
 ## Packages
 
-- **so_arm_control** — ros2_control hardware interfaces and controller configs, IK teleop / gripper-teleop nodes, self-collision-checked trajectory bridge, and the control-only and teleop-only launch files (real hardware or MuJoCo). Self-contained and launchable on its own.
+- **so_arm_control** — ros2_control hardware interfaces and controller configs, the IK+gripper teleop node, self-collision-checked trajectory bridge, and the control-only and teleop-only launch files (real hardware or MuJoCo). Self-contained and launchable on its own.
 - **so_arm_bringup** — top-level orchestration: `so_arm.launch.py` composes so_arm_control's control and teleop stacks for a single arm plus teach-and-repeat record/replay and an optional wrist camera (SO101 only); `leader_follower.launch.py` composes two of them into a dual-arm leader-follower rig.
 - **so_arm_description** — URDF and MJCF robot models and meshes for SO100 and SO101.
 
 ### Dependencies
 
 - **[ROS 2](https://docs.ros.org/en/kilted/)**: CI-tested on Kilted and Jazzy
-- **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster`, `joint_trajectory_controller`, and `parallel_gripper_controller`
+- **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster` and `joint_trajectory_controller` (arm and gripper both commanded through the one controller)
 - **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `modules/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK teleop solver
 - **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
@@ -122,7 +122,7 @@ Replay always takes priority over manual control while active — see `joint_sta
 
 ## Gripper Compliance (Experimental, Untested)
 
-`teleop_gripper_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default
+`teleop_ik_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default
 `0.0`) shifts the commanded gripper position away from the raw joystick/GUI target in proportion
 to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it —
 a software approximation of impedance control that stays entirely in Mode 0 (Position): the
@@ -134,7 +134,7 @@ gradually.
 
 ```text
 so_arm_ros2/
-├── so_arm_control/          # ros2_control config, teleop/gripper nodes, launch files
+├── so_arm_control/          # ros2_control config, IK+gripper teleop node, launch files
 │   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml
 │   ├── launch/                # control.launch.py, teleop.launch.py - control-only and teleop-only
 │   └── so_arm_control/

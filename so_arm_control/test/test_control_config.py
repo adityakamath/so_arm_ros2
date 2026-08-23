@@ -50,28 +50,19 @@ class TestControlYaml:
         assert types['so_arm_controller']['type'] == (
             'joint_trajectory_controller/JointTrajectoryController'
         )
-        assert types['gripper_controller']['type'] == (
-            'parallel_gripper_action_controller/GripperActionController'
-        )
         assert types['joint_state_broadcaster']['type'] == (
             'joint_state_broadcaster/JointStateBroadcaster'
         )
 
-    def test_so_arm_controller_joints_are_arm_joints_only(self):
-        """so_arm_controller must not command gripper_joint - that's gripper_controller's job."""
+    def test_so_arm_controller_commands_arm_and_gripper(self):
         joints = self.cfg['so_arm_controller']['ros__parameters']['joints']
-        assert 'gripper_joint' not in joints
-        assert len(joints) == 5
+        assert 'gripper_joint' in joints
+        assert len(joints) == 6
 
     def test_joint_state_broadcaster_covers_every_commanded_joint(self):
         jsb_joints = set(self.cfg['joint_state_broadcaster']['ros__parameters']['joints'])
-        arm_joints = set(self.cfg['so_arm_controller']['ros__parameters']['joints'])
-        gripper_joint = self.cfg['gripper_controller']['ros__parameters']['joint']
-        assert arm_joints <= jsb_joints
-        assert gripper_joint in jsb_joints
-
-    def test_gripper_controller_joint_matches_actual_gripper_joint_name(self):
-        assert self.cfg['gripper_controller']['ros__parameters']['joint'] == 'gripper_joint'
+        commanded_joints = set(self.cfg['so_arm_controller']['ros__parameters']['joints'])
+        assert commanded_joints <= jsb_joints
 
 
 # ── joint_trajectory_bridge.yaml ──────────────────────────────────────────────
@@ -95,11 +86,11 @@ class TestJointTrajectoryBridgeYaml:
                     'joint_states_topic'):
             assert not self.params[key].startswith('/'), f"'{key}' must not be absolute"
 
-    def test_joint_names_non_empty_and_exclude_gripper(self):
-        """The bridge only commands the 5-DOF arm - the gripper has its own action controller."""
+    def test_joint_names_include_gripper(self):
+        """The bridge commands the full 6-DOF set - gripper flows through so_arm_controller too."""
         names = self.params['joint_names']
-        assert isinstance(names, list) and len(names) == 5
-        assert 'gripper_joint' not in names
+        assert isinstance(names, list) and len(names) == 6
+        assert 'gripper_joint' in names
 
     def test_self_collision_check_enabled_by_default(self):
         """Safety default: collision checking must be on unless explicitly overridden."""

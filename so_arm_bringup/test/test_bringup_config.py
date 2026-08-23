@@ -42,7 +42,7 @@ class TestRecordReplayYaml:
     def test_required_keys_present(self):
         for key in ('recordings_dir', 'joint_states_topic', 'dynamic_joint_states_topic',
                     'tf_topic', 'estop_status_topic', 'output_topic', 'joint_names',
-                    'publish_rate', 'replay_loops', 'gripper_joint', 'gripper_action_name'):
+                    'publish_rate', 'replay_loops'):
             assert key in self.params, f"Missing key '{key}' in record_replay.yaml"
 
     def test_topics_are_relative_for_namespace_support(self):
@@ -61,11 +61,11 @@ class TestRecordReplayYaml:
         toggle_params = toggle_cfg['bool_toggle_node']['ros__parameters']
         assert self.params['estop_status_topic'] == toggle_params['emergency_stop']['publish_status_topic']
 
-    def test_joint_names_exclude_gripper(self):
-        """Gripper goes through the gripper_controller action, not joint_commands_replay."""
+    def test_joint_names_include_gripper(self):
+        """Gripper is replayed the same way as the arm - one joint_commands_replay message."""
         names = self.params['joint_names']
-        assert isinstance(names, list) and len(names) == 5
-        assert 'gripper_joint' not in names
+        assert isinstance(names, list) and len(names) == 6
+        assert 'gripper_joint' in names
 
     def test_output_topic_matches_switch_input(self):
         """joint_state_switch_node (so_arm_control) is the consumer on the other end."""
@@ -99,9 +99,6 @@ class TestLeaderOverrideYamls:
         with open(os.path.join(_CFG, 'leader_record_replay.yaml')) as f:
             overrides = yaml.safe_load(f)
         assert overrides['record_replay_output_topic'] == '/follower/joint_commands_replay'
-        assert overrides['record_replay_gripper_action_name'] == (
-            '/follower/gripper_controller/gripper_cmd'
-        )
         assert overrides['record_replay_estop_status_topic'] == '/follower/emergency_stop_active'
 
 
@@ -109,7 +106,7 @@ class TestLeaderOverrideYamls:
 
 class TestRecordReplayLaunchArgs:
     EXPECTED_ARGS = [
-        'recordings_dir', 'record_replay_output_topic', 'record_replay_gripper_action_name',
+        'recordings_dir', 'record_replay_output_topic',
         'record_replay_estop_status_topic', 'replay_loops',
     ]
 

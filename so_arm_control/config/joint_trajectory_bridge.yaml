@@ -10,6 +10,7 @@
       - elbow_flex_joint
       - wrist_flex_joint
       - wrist_roll_joint
+      - gripper_joint
     # Rare-edge-case floor only - 0.1 was silently throttling real (velocity-derived) durations.
     min_time_from_start: 0.01
     # Protects all paths that route through this bridge.

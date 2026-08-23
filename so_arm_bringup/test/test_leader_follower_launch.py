@@ -175,12 +175,6 @@ class TestLeaderRecordReplayGroup:
         args = _launch_args_of(self._record_replay_include(built), ctx)
         assert args['record_replay_output_topic'] == '/follower/joint_commands_replay'
 
-    def test_gripper_action_redirected_to_follower(self, built):
-        _, ctx = built
-        args = _launch_args_of(self._record_replay_include(built), ctx)
-        assert args['record_replay_gripper_action_name'] == \
-            '/follower/gripper_controller/gripper_cmd'
-
     def test_estop_status_topic_redirected_to_follower(self, built):
         """Replay is gated by the arm it's actually driving, not the arm recording it."""
         _, ctx = built

@@ -14,8 +14,6 @@ from launch_ros.substitutions import FindPackageShare
 def launch_setup(context):
     recordings_dir = LaunchConfiguration('recordings_dir').perform(context).strip()
     output_topic = LaunchConfiguration('record_replay_output_topic').perform(context).strip()
-    gripper_action_name = LaunchConfiguration(
-        'record_replay_gripper_action_name').perform(context).strip()
     estop_status_topic = LaunchConfiguration(
         'record_replay_estop_status_topic').perform(context).strip()
     replay_loops = LaunchConfiguration('replay_loops').perform(context).strip()
@@ -28,8 +26,6 @@ def launch_setup(context):
         overrides['recordings_dir'] = recordings_dir
     if output_topic:
         overrides['output_topic'] = output_topic
-    if gripper_action_name:
-        overrides['gripper_action_name'] = gripper_action_name
     if estop_status_topic:
         overrides['estop_status_topic'] = estop_status_topic
     if replay_loops:
@@ -56,10 +52,6 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'record_replay_output_topic', default_value='',
             description="Override record_replay_node's output_topic; empty uses yaml value.",
-        ),
-        DeclareLaunchArgument(
-            'record_replay_gripper_action_name', default_value='',
-            description="Override record_replay_node's gripper_action_name; empty uses yaml value.",
         ),
         DeclareLaunchArgument(
             'record_replay_estop_status_topic', default_value='',

@@ -5,10 +5,8 @@ import os
 import time
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
-from control_msgs.action import ParallelGripperCommand
 from control_msgs.msg import DynamicJointState
 import rclpy
-from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
@@ -53,8 +51,6 @@ class RecordReplayNode(Node):
         # 0 = loop forever (until paused or e-stopped), N>0 = exactly N total passes. Read once
         # at startup - not a live-settable parameter.
         self.declare_parameter('replay_loops', 1)
-        self.declare_parameter('gripper_joint', 'gripper_joint')
-        self.declare_parameter('gripper_action_name', 'gripper_controller/gripper_cmd')
         self.declare_parameter('record_active_topic', 'record_active')
         self.declare_parameter('replay_active_topic', 'replay_active')
 
@@ -68,8 +64,6 @@ class RecordReplayNode(Node):
         output_topic = self.get_parameter('output_topic').value
         self._joint_names = require_parameter(self, 'joint_names', array=True)
         publish_rate = float(self.get_parameter('publish_rate').value)
-        self._gripper_joint = self.get_parameter('gripper_joint').value
-        gripper_action_name = self.get_parameter('gripper_action_name').value
         replay_loops = int(self.get_parameter('replay_loops').value)
         try:
             self._playback = BagPlayer(replay_loops)
@@ -81,7 +75,6 @@ class RecordReplayNode(Node):
             (1, self._dynamic_joint_states_topic, 'control_msgs/msg/DynamicJointState'),
             (2, self._tf_topic, 'tf2_msgs/msg/TFMessage'),
         ])
-        self._last_gripper_sent: float | None = None
 
         self._estop_active = False
 
@@ -99,7 +92,6 @@ class RecordReplayNode(Node):
         )
 
         self._pub = self.create_publisher(JointState, output_topic, 10)
-        self._gripper_client = ActionClient(self, ParallelGripperCommand, gripper_action_name)
         self._self_client = self.create_client(SetBool, 'replay')
 
         record_active_topic = self.get_parameter('record_active_topic').value
@@ -206,21 +198,11 @@ class RecordReplayNode(Node):
         self._replay_active_pub.publish(Bool(data=False))
         self._self_set_active(False)
 
-    def _send_gripper_goal(self, position: float) -> None:
-        if not self._gripper_client.server_is_ready():
-            self.get_logger().warning(
-                'gripper_controller action server not available', throttle_duration_sec=5.0,
-            )
-            return
-        goal = ParallelGripperCommand.Goal()
-        goal.command = JointState(name=[self._gripper_joint], position=[position])
-        self._gripper_client.send_goal_async(goal)
-
     def _on_timer(self) -> None:
         result = self._playback.advance(time.monotonic())
         if result is None:
             return  # nothing loaded, or paused/stopped
-        sample, looped, finished = result
+        sample, _looped, finished = result
 
         name_to_position = dict(zip(sample.name, sample.position))
         try:
@@ -235,20 +217,6 @@ class RecordReplayNode(Node):
             out.name = list(self._joint_names)
             out.position = positions
             self._pub.publish(out)
-
-        if self._gripper_joint in name_to_position:
-            gripper_position = name_to_position[self._gripper_joint]
-            if (
-                self._last_gripper_sent is None
-                or abs(gripper_position - self._last_gripper_sent) > 1e-4
-            ):
-                self._send_gripper_goal(gripper_position)
-                self._last_gripper_sent = gripper_position
-
-        if looped:
-            # Force the first sample of the next pass to be treated as changed, even if it
-            # coincidentally matches the position just sent above.
-            self._last_gripper_sent = None
 
         if finished:
             self.get_logger().info('Replay complete')
@@ -275,7 +243,6 @@ class RecordReplayNode(Node):
                     response.message = message
                     return response
                 self._playback.arm()
-                self._last_gripper_sent = None
             else:
                 message = 'Replay resumed'
 

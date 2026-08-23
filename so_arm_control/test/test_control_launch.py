@@ -7,7 +7,7 @@ ros2_control_hardware_type:=real, so this exercises the actual hardware plugin w
 real serial port or real servos. Requires sts_hardware_interface to be built.
 
 Exercises the real end-to-end path a user actually runs: robot_state_publisher ->
-controller_manager -> joint_state_broadcaster/so_arm_controller/gripper_controller ->
+controller_manager -> joint_state_broadcaster/so_arm_controller (arm + gripper) ->
 joint_trajectory_bridge, including the self-collision checker built from the real URDF/meshes.
 """
 
@@ -31,7 +31,7 @@ from trajectory_msgs.msg import JointTrajectory
 
 _JOINT_NAMES = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_flex_joint',
-    'wrist_flex_joint', 'wrist_roll_joint',
+    'wrist_flex_joint', 'wrist_roll_joint', 'gripper_joint',
 ]
 _name_counter = itertools.count()
 
@@ -121,11 +121,11 @@ class TestControlStackComesUp(unittest.TestCase):
         self.assertIsNotNone(msg, '/joint_states never published')
         self.assertTrue(set(_JOINT_NAMES) <= set(msg.name))
 
-    def test_all_three_controllers_become_active(self):
+    def test_both_controllers_become_active(self):
         service = '/controller_manager/list_controllers'
         client = self._node.create_client(ListControllers, service)
         self.assertTrue(client.wait_for_service(timeout_sec=30.0))
-        expected = {'joint_state_broadcaster', 'so_arm_controller', 'gripper_controller'}
+        expected = {'joint_state_broadcaster', 'so_arm_controller'}
         deadline = time.monotonic() + 30.0
         active = set()
         while time.monotonic() < deadline:

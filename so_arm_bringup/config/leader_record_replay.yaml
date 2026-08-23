@@ -1,4 +1,3 @@
 # Leader records; playback output is redirected to the follower - see follower_teleop.yaml.
 record_replay_output_topic: '/follower/joint_commands_replay'
-record_replay_gripper_action_name: '/follower/gripper_controller/gripper_cmd'
 record_replay_estop_status_topic: '/follower/emergency_stop_active'  # gate replay by the arm it's driving

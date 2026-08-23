@@ -12,7 +12,6 @@
       - elbow_flex_joint
       - wrist_flex_joint
       - wrist_roll_joint
+      - gripper_joint
     publish_rate: 50.0  # matches controller_manager's update_rate (so_arm_control/config/control.yaml)
     replay_loops: 1  # 0 = loop forever, N>0 = exactly N total passes
-    gripper_joint: gripper_joint
-    gripper_action_name: gripper_controller/gripper_cmd

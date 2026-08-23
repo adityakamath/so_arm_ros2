@@ -25,8 +25,8 @@
         header-frame_id:
           value: 'base_footprint'  # verified URDF root, not base_link
 
-    # Raw -1..1 passthrough - teleop_gripper_node remaps per-model, and also picks up gripper
-    # position from /joint_commands when GUI sliders are the active joint_state_switch input.
+    # Raw -1..1 passthrough - teleop_ik_node remaps per-model; gripper's GUI/replay position
+    # instead flows through joint_commands_gui/joint_commands_replay like the arm's own joints.
     gripper_teleop:
       type: topic
       interface_type: std_msgs/msg/Float64
@@ -104,11 +104,11 @@
     gui.own_service: joint_state_switch
     ik.topic: joint_commands_ik
 
-/**/teleop_gripper_node:
+/**/joint_command_sync_node:
   ros__parameters:
-    # rad per unit of normalized load - compliant setpoint-shaping, disabled by default. Tune
-    # empirically (sign included) starting from 0 if enabling - see README's Gripper Compliance.
-    effort_gain: 0.0
+    gui_active_topic: joint_state_switch_active  # published by joint_state_switch_node, above
+    publish_rate: 30.0  # matches the Foxglove Joint State Publisher panel's own rate
+    queue_depth: 10
 
 /**/teleop_ik_node:
   ros__parameters:
@@ -121,6 +121,10 @@
     max_acceleration: 400.0  # rad/s^2 - caps velocity change tick to tick, see _kinematic_limit
     # meters - caps ik_target distance from base; 0 disables.
     max_target_reach: 0.45
+    # rad per unit of normalized gripper load - compliant setpoint-shaping, disabled by default.
+    # Tune empirically (sign included) starting from 0 if enabling - see README's Gripper
+    # Compliance.
+    effort_gain: 0.0
 
 /**/target_visualizer_node:
   ros__parameters:

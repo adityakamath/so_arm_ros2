@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SO-ARM teleop stack: joystick/GUI IK teleop, gripper teleop.
+"""SO-ARM teleop stack: joystick/GUI IK+gripper teleop.
 
 Record/replay moved to so_arm_bringup's own record_replay.launch.py - it neither controls nor
 calibrates the robot, unlike everything else launched here.
@@ -47,38 +47,23 @@ def launch_setup(context):
         ),
         Node(
             package='so_arm_control',
-            executable='bool_toggle_node',
-            name='bool_toggle_node',
-            output='screen',
-            parameters=[config],
-        ),
-        Node(
-            package='so_arm_control',
-            executable='teleop_gripper_node',
-            name='teleop_gripper_node',
-            output='screen',
-            parameters=[config],
-        ),
-        Node(
-            package='so_arm_control',
             executable='teleop_ik_node',
             name='teleop_ik_node',
             output='screen',
             parameters=[config, ik_frame_overrides],
         ),
+        # bool_toggle_node, joint_state_switch_node, joint_command_sync_node,
+        # target_visualizer_node: one process, one MultiThreadedExecutor - none of these touch
+        # the actuation path or need an isolated numpy ABI (unlike teleop_ik_node above), and
+        # they always launch together anyway. See teleop_support_node.py's own docstring.
+        # No name= here: each of the four keeps its own hardcoded node name in code, and
+        # launch_ros's name= would emit a bare -r __node:=<name> remap that renames every
+        # rclpy.Node in the process to it - breaking all four nodes' /**/<own_name>: yaml lookup.
         Node(
             package='so_arm_control',
-            executable='target_visualizer_node',
-            name='target_visualizer_node',
+            executable='teleop_support_node',
             output='screen',
             parameters=[config, visualizer_frame_overrides],
-        ),
-        Node(
-            package='so_arm_control',
-            executable='joint_state_switch_node',
-            name='joint_state_switch_node',
-            output='screen',
-            parameters=[config],
         ),
     ]
 

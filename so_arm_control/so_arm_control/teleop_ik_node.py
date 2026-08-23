@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Integrate a joystick Twist into a target pose and IK-drive the arm to it, Pinocchio-based."""
+"""Integrate a joystick Twist into a target pose, IK-drive the arm to it (Pinocchio-based), and
+drive gripper_joint alongside it from a raw joystick axis - one combined output, one arbitration
+gate (see joint_state_switch_node) for the whole 6-joint arm+gripper set."""
 
 import math
+import xml.etree.ElementTree as ElementTree
 
 # Must be the first non-stdlib import: runs so_arm_utils.kinematics' numpy-ABI sys.path fix
 # before rclpy/geometry_msgs/sensor_msgs transitively import the wrong numpy.
@@ -15,12 +18,20 @@ from sensor_msgs.msg import JointState
 from so_arm_control.so_arm_utils.params import require_parameter
 from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, REALTIME_QOS, ROBOT_DESCRIPTION_QOS
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown
-from std_msgs.msg import Bool, String
+from so_arm_control.so_arm_utils.urdf import parse_joint_velocity_and_limits
+from std_msgs.msg import Bool, Float64, String
 import tf2_ros
 
 
+def _remap(raw: float, lo: float, hi: float) -> float:
+    """Linearly maps raw in [-1, 1] to [lo, hi]."""
+    scale, offset = (hi - lo) / 2, (hi + lo) / 2
+    return raw * scale + offset
+
+
 class TeleopIkNode(Node):
-    """Integrate a joystick twist into a target pose, visualize it, and IK-drive the arm there."""
+    """Integrate a joystick twist into a target pose, IK-drive the arm there, and drive
+    gripper_joint from a raw joystick axis - same output, same arbitration gate as the arm."""
 
     def __init__(self, parameter_overrides: list | None = None):
         super().__init__('teleop_ik_node', parameter_overrides=parameter_overrides)
@@ -40,6 +51,11 @@ class TeleopIkNode(Node):
         self.declare_parameter('elbow_flex_joint', 'elbow_flex_joint')
         self.declare_parameter('wrist_flex_joint', 'wrist_flex_joint')
         self.declare_parameter('wrist_roll_joint', 'wrist_roll_joint')
+        self.declare_parameter('gripper_joint', 'gripper_joint')
+        self.declare_parameter('gripper_teleop_topic', 'gripper_teleop')
+        # rad per unit of load - compliant setpoint-shaping gain, 0.0 = disabled. Uncalibrated,
+        # tune empirically starting from 0.
+        self.declare_parameter('effort_gain', 0.0)
         # roll, pitch, yaw (rad) - roll[0] is just the initial value, driven live afterward.
         self.declare_parameter('default_orientation', [0.0, 0.0, 0.0])
         # No default - seeding the start position and IK solving both need the real link.
@@ -77,6 +93,13 @@ class TeleopIkNode(Node):
             self.get_parameter('wrist_flex_joint').value,
             self.get_parameter('wrist_roll_joint').value,
         ]
+        self._gripper_joint = self.get_parameter('gripper_joint').value
+        self._all_joint_names = [*self._joint_names, self._gripper_joint]
+        gripper_teleop_topic = self.get_parameter('gripper_teleop_topic').value
+        self._effort_gain = float(self.get_parameter('effort_gain').value)
+        self._gripper_limit: tuple | None = None
+        self._gripper_raw: float | None = None
+        self._current_effort: float | None = None
         orientation_param = self.get_parameter('default_orientation').value
         self._default_orientation = tuple(float(v) for v in orientation_param)
         self._target_roll = self._default_orientation[0]
@@ -91,9 +114,12 @@ class TeleopIkNode(Node):
         self._own_input_name = self.get_parameter('own_input_name').value
         self._active_input = self._own_input_name  # assume active until the first broadcast
         max_acceleration = float(self.get_parameter('max_acceleration').value)
-        self._limiter = KinematicLimiter(self._joint_names, publish_rate, max_acceleration)
+        self._limiter = KinematicLimiter(self._all_joint_names, publish_rate, max_acceleration)
 
         self.create_subscription(TwistStamped, twist_topic, self._on_twist, REALTIME_QOS)
+        self.create_subscription(
+            Float64, gripper_teleop_topic, self._on_gripper_teleop, REALTIME_QOS,
+        )
         self._joint_pub = self.create_publisher(JointState, output_topic, 10)
         self._tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
@@ -151,10 +177,22 @@ class TeleopIkNode(Node):
             self.get_logger().info(
                 f'Loaded per-joint velocity limits for slew limiting: {self._limiter.max_velocity}'
             )
+        try:
+            _velocity, gripper_limits = parse_joint_velocity_and_limits(
+                msg.data, joint_names=[self._gripper_joint],
+            )
+        except ElementTree.ParseError as exc:
+            self.get_logger().error(f'Failed to parse robot_description as XML: {exc}')
+            return
+        if self._gripper_joint in gripper_limits:
+            self._gripper_limit = gripper_limits[self._gripper_joint]
+            self.get_logger().info(f"'{self._gripper_joint}' limit: {self._gripper_limit}")
         self._try_seed_from_fk()
 
     def _on_joint_states(self, msg: JointState) -> None:
         self._limiter.on_joint_states(msg)
+        if self._gripper_joint in msg.name and msg.effort:
+            self._current_effort = msg.effort[msg.name.index(self._gripper_joint)]
         self._try_seed_from_fk()
 
     def _try_seed_from_fk(self) -> None:
@@ -169,7 +207,7 @@ class TeleopIkNode(Node):
         self._position = list(position)
         try:
             self._limiter.prev_solution = {
-                name: self._limiter.latest_joint_state[name] for name in self._joint_names
+                name: self._limiter.latest_joint_state[name] for name in self._all_joint_names
             }
             # wrist_roll_joint is last in _joint_names; avoids a jump on power-on.
             self._target_roll = self._limiter.prev_solution[self._joint_names[-1]]
@@ -182,6 +220,18 @@ class TeleopIkNode(Node):
 
     def _on_active_input(self, msg: String) -> None:
         self._active_input = msg.data
+
+    def _on_gripper_teleop(self, msg: Float64) -> None:
+        self._gripper_raw = msg.data
+
+    def _compute_gripper_target(self) -> float | None:
+        if self._gripper_limit is None or self._gripper_raw is None:
+            return None
+        lower, upper = self._gripper_limit
+        target = _remap(self._gripper_raw, upper, (lower + upper) / 2)
+        if self._effort_gain and self._current_effort is not None:
+            target = min(max(target - self._effort_gain * self._current_effort, lower), upper)
+        return target
 
     def _on_seed_timeout(self) -> None:
         if not self._seeded_from_fk:
@@ -262,13 +312,21 @@ class TeleopIkNode(Node):
                 'No IK solution converged for current target', throttle_duration_sec=2.0,
             )
             return
+
+        gripper_target = self._compute_gripper_target()
+        if gripper_target is None:
+            if current is None or self._gripper_joint not in current:
+                return  # no gripper limit/raw/live-position yet - can't publish a full set
+            gripper_target = current[self._gripper_joint]
+        solution[self._gripper_joint] = gripper_target
+
         solution = self._limiter.kinematic_limit(solution, current)
         self._limiter.prev_solution = dict(solution)
 
         joint_state = JointState()
         joint_state.header.stamp = stamp
-        joint_state.name = list(self._joint_names)
-        joint_state.position = [solution[name] for name in self._joint_names]
+        joint_state.name = list(self._all_joint_names)
+        joint_state.position = [solution[name] for name in self._all_joint_names]
         self._joint_pub.publish(joint_state)
 
 

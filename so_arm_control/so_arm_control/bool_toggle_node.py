@@ -4,11 +4,50 @@
 import rclpy
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
-from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
-from so_arm_control.so_arm_utils.service_event import subscribe_service_event
+from service_msgs.msg import ServiceEventInfo
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, STATE_SERVICE_QOS
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown
 from std_msgs.msg import Bool
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import SetBool, SetBool_Event, Trigger
+
+_MAX_PENDING = 16  # defensive cap on a service-event correlation dict, shouldn't normally fill
+
+
+def correlate_service_event(msg: SetBool_Event, pending: dict) -> bool | None:
+    """Track msg in `pending` (by client_gid+sequence_number); return the resolved bool on a
+    successful response, else None. `pending` is owned by the caller and mutated in place."""
+    key = (bytes(msg.info.client_gid), msg.info.sequence_number)
+
+    if msg.info.event_type == ServiceEventInfo.REQUEST_RECEIVED:
+        if msg.request:
+            pending[key] = msg.request[0].data
+        if len(pending) > _MAX_PENDING:
+            pending.pop(next(iter(pending)), None)
+        return None
+
+    if msg.info.event_type == ServiceEventInfo.RESPONSE_SENT:
+        if key not in pending or not msg.response:
+            return None
+        value = pending.pop(key)
+        return value if msg.response[0].success else None
+
+    return None
+
+
+def subscribe_service_event(node: Node, service_name: str, on_change) -> None:
+    """Call on_change(value) whenever service_name's own '_service_event' introspection stream
+    reports a successful call - used only for emergency_stop, served outside so_arm_control
+    with no status topic of its own to subscribe to instead (see every other toggle below)."""
+    pending: dict = {}
+
+    def _on_event(msg: SetBool_Event) -> None:
+        value = correlate_service_event(msg, pending)
+        if value is not None:
+            on_change(value)
+
+    node.create_subscription(
+        SetBool_Event, f'{service_name}/_service_event', _on_event, STATE_SERVICE_QOS,
+    )
 
 
 class BoolToggle:

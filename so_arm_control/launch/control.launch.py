@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""SO-ARM control stack: robot_state_publisher, controller_manager, JSB, so_arm_controller,
-gripper_controller, joint_trajectory_bridge. Control only - see so_arm_bringup for a launch
+"""SO-ARM control stack: robot_state_publisher, controller_manager, JSB, so_arm_controller
+(arm + gripper), joint_trajectory_bridge. Control only - see so_arm_bringup for a launch
 file that composes this with teleop.launch.py.
 """
 
@@ -110,18 +110,11 @@ def launch_setup(context):
         arguments=['joint_state_broadcaster', '-c', 'controller_manager',
                    '--controller-manager-timeout', '30'], output='both',
     )
-    arm_gripper_spawners = [
-        Node(
-            package='controller_manager', executable='spawner',
-            arguments=['so_arm_controller', '-c', 'controller_manager',
-                       '--controller-manager-timeout', '30'], output='both',
-        ),
-        Node(
-            package='controller_manager', executable='spawner',
-            arguments=['gripper_controller', '-c', 'controller_manager',
-                       '--controller-manager-timeout', '30'], output='both',
-        ),
-    ]
+    so_arm_controller_spawner = Node(
+        package='controller_manager', executable='spawner',
+        arguments=['so_arm_controller', '-c', 'controller_manager',
+                   '--controller-manager-timeout', '30'], output='both',
+    )
 
     # NOTE: lekiwi_control's stagger pattern (RegisterEventHandler+OnProcessStart) is NOT used
     # here - actions fired from an event handler callback run outside the synchronous visit
@@ -130,7 +123,7 @@ def launch_setup(context):
     # controller_manager. Plain TimerActions stay inside that tree and are namespace-safe.
     controller_spawner_actions = [
         TimerAction(period=2.0, actions=[joint_state_broadcaster_spawner]),
-        TimerAction(period=2.5, actions=arm_gripper_spawners),
+        TimerAction(period=2.5, actions=[so_arm_controller_spawner]),
     ]
 
     return [

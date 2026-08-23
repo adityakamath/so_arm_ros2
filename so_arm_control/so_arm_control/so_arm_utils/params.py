@@ -1,6 +1,7 @@
+"""Required-parameter helper: fail loudly instead of silently running with an empty default."""
+
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-
 
 def require_parameter(node: Node, name: str, array: bool = False):
     """Return a required parameter, raising if it's empty or unset.
