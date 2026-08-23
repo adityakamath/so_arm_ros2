@@ -17,6 +17,7 @@ from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
 from so_arm_control.so_arm_utils.params import require_parameter
 from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, REALTIME_QOS, ROBOT_DESCRIPTION_QOS
+from so_arm_control.so_arm_utils.rotation import rpy_to_quaternion
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown
 from so_arm_control.so_arm_utils.urdf import parse_joint_velocity_and_limits
 from std_msgs.msg import Bool, Float64, String
@@ -275,10 +276,19 @@ class TeleopIkNode(Node):
         transform.header.stamp = stamp
         transform.header.frame_id = self._parent_frame
         transform.child_frame_id = self._target_frame
+
         transform.transform.translation.x = self._position[0]
         transform.transform.translation.y = self._position[1]
         transform.transform.translation.z = self._position[2]
-        transform.transform.rotation.w = 1.0
+
+        qx, qy, qz, qw = rpy_to_quaternion(
+            self._target_roll, self._default_orientation[1], self._default_orientation[2],
+        )
+        transform.transform.rotation.x = qx
+        transform.transform.rotation.y = qy
+        transform.transform.rotation.z = qz
+        transform.transform.rotation.w = qw
+
         self._tf_broadcaster.sendTransform(transform)
 
         if self._ik is None:

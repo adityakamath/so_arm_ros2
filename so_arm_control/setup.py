@@ -29,7 +29,6 @@ setup(
             'teleop_ik_node = so_arm_control.teleop_ik_node:main',
             'target_visualizer_node = so_arm_control.target_visualizer_node:main',
             'joint_state_switch_node = so_arm_control.joint_state_switch_node:main',
-            'joint_command_sync_node = so_arm_control.joint_command_sync_node:main',
             'teleop_support_node = so_arm_control.teleop_support_node:main',
             'generate_srdf = so_arm_control.scripts.generate_srdf:main',
         ],

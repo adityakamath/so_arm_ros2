@@ -104,12 +104,6 @@
     gui.own_service: joint_state_switch
     ik.topic: joint_commands_ik
 
-/**/joint_command_sync_node:
-  ros__parameters:
-    gui_active_topic: joint_state_switch_active  # published by joint_state_switch_node, above
-    publish_rate: 30.0  # matches the Foxglove Joint State Publisher panel's own rate
-    queue_depth: 10
-
 /**/teleop_ik_node:
   ros__parameters:
     twist_topic: target_teleop  # joy_teleop's own output, see "teleop" above

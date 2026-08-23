@@ -52,13 +52,13 @@ def launch_setup(context):
             output='screen',
             parameters=[config, ik_frame_overrides],
         ),
-        # bool_toggle_node, joint_state_switch_node, joint_command_sync_node,
-        # target_visualizer_node: one process, one MultiThreadedExecutor - none of these touch
-        # the actuation path or need an isolated numpy ABI (unlike teleop_ik_node above), and
-        # they always launch together anyway. See teleop_support_node.py's own docstring.
-        # No name= here: each of the four keeps its own hardcoded node name in code, and
+        # bool_toggle_node, joint_state_switch_node, target_visualizer_node: one process, one
+        # MultiThreadedExecutor - none of these touch the actuation path or need an isolated
+        # numpy ABI (unlike teleop_ik_node above), and they always launch together anyway. See
+        # teleop_support_node.py's own docstring.
+        # No name= here: each of the three keeps its own hardcoded node name in code, and
         # launch_ros's name= would emit a bare -r __node:=<name> remap that renames every
-        # rclpy.Node in the process to it - breaking all four nodes' /**/<own_name>: yaml lookup.
+        # rclpy.Node in the process to it - breaking all three nodes' /**/<own_name>: yaml lookup.
         Node(
             package='so_arm_control',
             executable='teleop_support_node',
