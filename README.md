@@ -26,7 +26,7 @@ ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arm
 
 - **[ROS 2](https://docs.ros.org/en/kilted/)**: CI-tested on Kilted and Jazzy
 - **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster` and `joint_trajectory_controller` (arm and gripper both commanded through the one controller)
-- **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (git submodule under `modules/`): Hardware interface for Feetech STS servos
+- **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (built separately, anywhere in this workspace's `src/`): Hardware interface for Feetech STS servos
 - **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK teleop solver
 - **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
 - **[joy](https://github.com/ros-drivers/joystick_drivers)** / **[joy_teleop](https://index.ros.org/p/joy_teleop/)**: Joystick teleoperation
@@ -53,9 +53,9 @@ automatically disables self-collision checking instead of crashing. Install depe
 ./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
 ```
 
-`sts_hardware_interface` is a submodule under `modules/`, left uninitialized by a plain clone. If you already have it elsewhere in this workspace (e.g. via `lekiwi_ros2/modules/`), leave it uninitialized here — colcon will find that copy. Otherwise, pull it in with `git submodule update --init --recursive` from `so_arm_ros2/` (`--recursive` also fetches its own `external/SCServo_Linux` submodule).
+`sts_hardware_interface` is not vendored here - it's a plain package dependency, built once anywhere in this workspace's `src/` and shared by every repo that needs it. If you already have it elsewhere (e.g. cloned alongside `lekiwi_ros2`), colcon will find that copy. Otherwise, clone it directly into `src/`: `git clone --recursive https://github.com/adityakamath/sts_hardware_interface.git` (`--recursive` also fetches its own `external/SCServo_Linux` submodule).
 
-No real servos yet? `ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true` brings up the full stack with `sts_hardware_interface`'s own mock mode (servo I/O faked internally) instead - still needs the submodule built, but no serial port or real hardware required.
+No real servos yet? `ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true` brings up the full stack with `sts_hardware_interface`'s own mock mode (servo I/O faked internally) instead - still needs it built, but no serial port or real hardware required.
 
 No wrist camera fitted? Leave `wrist_camera` at its `true` default - the driver detects the missing camera, logs a warning, and exits cleanly instead of crashing; set `wrist_camera:=false` to skip it entirely.
 
@@ -146,10 +146,10 @@ so_arm_ros2/
 │   └── so_arm_bringup/
 │       ├── record_replay_node.py, opencv_camera_node.py
 │       └── so_arm_utils/       # BagRecorder/BagPlayer (mcap round trip)
-├── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
-└── modules/
-    └── sts_hardware_interface/  # Feetech STS servo hardware interface (git submodule, uninitialized unless needed)
+└── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
 ```
+
+`sts_hardware_interface` isn't part of this tree - it's built as its own package elsewhere in the workspace's `src/` (see Dependencies above).
 
 ## License
 

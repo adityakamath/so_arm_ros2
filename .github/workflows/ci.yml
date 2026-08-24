@@ -35,8 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
           path: src/so_arm_ros2
+
+      - name: Clone sts_hardware_interface
+        # No longer vendored as a submodule here - it's shared workspace-wide from
+        # lekiwi_ros2 in local dev, so CI clones its own throwaway copy to build against.
+        run: |
+          git clone --recursive https://github.com/adityakamath/sts_hardware_interface.git \
+            src/so_arm_ros2/modules/sts_hardware_interface
 
       - name: Install ROS dependencies
         run: |
