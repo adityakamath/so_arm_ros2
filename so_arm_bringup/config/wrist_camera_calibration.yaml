@@ -1,0 +1,28 @@
+# PLACEHOLDER calibration for the Innomaker U20CAM-1080P, captured at 1280x960 (4:3).
+# No factory intrinsics are published for this camera; fx/fy below are derived from its
+# datasheet's 103-degree horizontal FOV via the pinhole model (fx = (width/2) / tan(HFOV/2)),
+# scaled down from the 1920x1080 derivation (763.0 @ 1920 wide) to this capture width, not
+# measured. Distortion is left at zero since it's unknown - real, and likely non-trivial given
+# this lens's wide (130-degree diagonal) FOV. Good enough to give Foxglove a valid focal length;
+# replace with a real checkerboard calibration (e.g. ROS's camera_calibration package) before
+# relying on this for rectification, projection, or depth/pointcloud fusion.
+image_width: 1280
+image_height: 960
+camera_name: wrist_camera
+distortion_model: plumb_bob
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [508.7, 0.0, 640.0, 0.0, 508.7, 480.0, 0.0, 0.0, 1.0]
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0.0, 0.0, 0.0, 0.0, 0.0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [508.7, 0.0, 640.0, 0.0, 0.0, 508.7, 480.0, 0.0, 0.0, 0.0, 1.0, 0.0]

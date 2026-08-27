@@ -1,10 +1,11 @@
 # Innomaker U20CAM-1080P. fourcc forced to MJPG - raw YUY2 at 1920x1080@30fps needs ~1.24Gbps,
-# past USB 2.0's ~480Mbps ceiling.
+# past USB 2.0's ~480Mbps ceiling. 4:3 (1280x960) instead of the sensor's native 16:9, to match
+# wrist_camera_calibration.yaml and avoid letterboxing in Foxglove's frustum.
 /**/wrist_camera_node:
   ros__parameters:
     index_or_path: '0'  # override per-machine: a Linux /dev/video* path or a macOS index differ
-    width: 1920
-    height: 1080
+    width: 1280
+    height: 960
     fps: 30.0
     fourcc: 'MJPG'
     backend: ''  # '' = cv2.CAP_ANY (auto); override to 'v4l2' if ANY picks a bad format on Linux
@@ -14,3 +15,8 @@
     camera_info_topic: camera_info
     publish_rate: 30.0
     warmup_s: 1.0
+    publish_compressed: true
+    compressed_topic: ''  # '' -> image_raw/compressed (image_transport convention)
+    compressed_width: 640
+    compressed_height: 480
+    jpeg_quality: 80

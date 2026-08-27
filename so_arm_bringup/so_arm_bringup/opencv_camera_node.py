@@ -26,7 +26,7 @@ from cv_bridge import CvBridge  # noqa: E402
 import rclpy  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from rclpy.parameter import Parameter  # noqa: E402
-from sensor_msgs.msg import CameraInfo, Image  # noqa: E402
+from sensor_msgs.msg import CameraInfo, CompressedImage, Image  # noqa: E402
 from so_arm_control.so_arm_utils.params import require_parameter  # noqa: E402
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown  # noqa: E402
 import yaml  # noqa: E402
@@ -136,6 +136,11 @@ class OpenCVCameraNode(Node):
         self.declare_parameter('camera_info_topic', 'camera_info')
         self.declare_parameter('publish_rate', 30.0)
         self.declare_parameter('warmup_s', 1.0)
+        self.declare_parameter('publish_compressed', True)
+        self.declare_parameter('compressed_topic', '')  # '' -> f'{image_topic}/compressed'
+        self.declare_parameter('compressed_width', 640)
+        self.declare_parameter('compressed_height', 480)
+        self.declare_parameter('jpeg_quality', 80)
 
         self._capture = None
         self._hardware_missing = False
@@ -156,6 +161,13 @@ class OpenCVCameraNode(Node):
         camera_info_topic = self.get_parameter('camera_info_topic').value
         publish_rate = float(self.get_parameter('publish_rate').value)
         warmup_s = float(self.get_parameter('warmup_s').value)
+        self._publish_compressed = bool(self.get_parameter('publish_compressed').value)
+        compressed_topic = self.get_parameter('compressed_topic').value or f'{image_topic}/compressed'
+        self._compressed_size = (
+            int(self.get_parameter('compressed_width').value),
+            int(self.get_parameter('compressed_height').value),
+        )
+        self._jpeg_quality = int(self.get_parameter('jpeg_quality').value)
 
         self._frame_id = frame_id
         self._bridge = CvBridge()
@@ -176,6 +188,10 @@ class OpenCVCameraNode(Node):
 
         self._image_pub = self.create_publisher(Image, image_topic, 10)
         self._camera_info_pub = self.create_publisher(CameraInfo, camera_info_topic, 10)
+        self._compressed_pub = (
+            self.create_publisher(CompressedImage, compressed_topic, 10)
+            if self._publish_compressed else None
+        )
 
         self._capture.start()
         if warmup_s > 0:
@@ -205,6 +221,19 @@ class OpenCVCameraNode(Node):
 
         self._camera_info.header.stamp = header_stamp
         self._camera_info_pub.publish(self._camera_info)
+
+        if self._compressed_pub is not None:
+            resized = cv2.resize(frame, self._compressed_size, interpolation=cv2.INTER_AREA)
+            ok, encoded = cv2.imencode(
+                '.jpg', resized, [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality],
+            )
+            if ok:
+                compressed_msg = CompressedImage()
+                compressed_msg.header.stamp = header_stamp
+                compressed_msg.header.frame_id = self._frame_id
+                compressed_msg.format = 'jpeg'
+                compressed_msg.data = encoded.tobytes()
+                self._compressed_pub.publish(compressed_msg)
 
     def destroy_node(self) -> bool:
         if self._capture is not None:

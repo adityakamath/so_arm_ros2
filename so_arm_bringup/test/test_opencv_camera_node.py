@@ -118,7 +118,7 @@ class _FakeCapture:
         self.closed = True
 
 
-def _make_node():
+def _make_node(publish_compressed=True):
     node = OpenCVCameraNode.__new__(OpenCVCameraNode)
     RclpyNode.__init__(node, f'test_opencv_camera_{next(_name_counter)}')
     node._frame_id = 'wrist_camera_optical_frame'
@@ -126,13 +126,18 @@ def _make_node():
     node._camera_info = CameraInfo(width=640, height=480)
     node._camera_info.header.frame_id = node._frame_id
     node._capture = _FakeCapture()
+    node._compressed_size = (320, 240)
+    node._jpeg_quality = 80
 
     published_images = []
     published_infos = []
+    published_compressed = []
     node._image_pub = _Publisher(published_images)
     node._camera_info_pub = _Publisher(published_infos)
+    node._compressed_pub = _Publisher(published_compressed) if publish_compressed else None
     node.published_images = published_images
     node.published_infos = published_infos
+    node.published_compressed = published_compressed
     return node
 
 
@@ -147,6 +152,13 @@ class _Publisher:
 @pytest.fixture
 def node():
     n = _make_node()
+    yield n
+    n.destroy_node()
+
+
+@pytest.fixture
+def node_no_compressed():
+    n = _make_node(publish_compressed=False)
     yield n
     n.destroy_node()
 
@@ -184,6 +196,32 @@ class TestOnTimer:
         node._on_timer()
         node._on_timer()
         assert len(node.published_images) == 2
+
+    def test_publishes_compressed_image_alongside_raw(self, node):
+        node._capture.frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        node._on_timer()
+        assert len(node.published_compressed) == 1
+
+    def test_compressed_image_is_jpeg_encoded_at_the_configured_size(self, node):
+        node._capture.frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        node._on_timer()
+        msg = node.published_compressed[0]
+        assert msg.format == 'jpeg'
+        decoded = cv2.imdecode(np.frombuffer(msg.data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        assert decoded.shape[:2] == (240, 320)  # (height, width) - node._compressed_size is (w, h)
+
+    def test_compressed_image_has_the_configured_frame_id_and_matching_stamp(self, node):
+        node._capture.frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        node._on_timer()
+        img_stamp = node.published_images[0].header.stamp
+        compressed_stamp = node.published_compressed[0].header.stamp
+        assert node.published_compressed[0].header.frame_id == 'wrist_camera_optical_frame'
+        assert (img_stamp.sec, img_stamp.nanosec) == (compressed_stamp.sec, compressed_stamp.nanosec)
+
+    def test_no_compressed_publisher_skips_compression_without_error(self, node_no_compressed):
+        node_no_compressed._capture.frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        node_no_compressed._on_timer()
+        assert len(node_no_compressed.published_images) == 1
 
 
 class TestDestroyNode:
