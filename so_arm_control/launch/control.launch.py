@@ -6,6 +6,7 @@ file that composes this with teleop.launch.py.
 
 import subprocess
 import tempfile
+import yaml
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
@@ -45,11 +46,34 @@ def launch_setup(context):
     else:
         final_mujoco_model = ''
 
-    xacro_cmd = f'{xacro} {urdf_xacro_path(pkg_desc, model)}'
-    if serial_port:
-        xacro_cmd += f' serial_port:={serial_port}'
-    if use_mock:
-        xacro_cmd += f' use_mock:={use_mock}'
+    _cfg = yaml.safe_load(open(f'{pkg_ctrl}/config/urdf_config.yaml'))
+
+    final_serial_port = serial_port if serial_port else _cfg['serial_port']
+    final_use_mock = use_mock if use_mock else str(_cfg['use_mock']).lower()
+
+    xacro_cmd = (
+        f'{xacro} {urdf_xacro_path(pkg_desc, model)}'
+        f' serial_port:={final_serial_port}'
+        f' use_mock:={final_use_mock}'
+        f' baud_rate:={_cfg["baud_rate"]}'
+        f' use_sync_write:={str(_cfg["use_sync_write"]).lower()}'
+        f' arm_operating_mode:={_cfg["arm_operating_mode"]}'
+        f' gripper_operating_mode:={_cfg["gripper_operating_mode"]}'
+        f' shoulder_pan_motor_id:={_cfg["shoulder_pan_motor_id"]}'
+        f' shoulder_lift_motor_id:={_cfg["shoulder_lift_motor_id"]}'
+        f' elbow_flex_motor_id:={_cfg["elbow_flex_motor_id"]}'
+        f' wrist_flex_motor_id:={_cfg["wrist_flex_motor_id"]}'
+        f' wrist_roll_motor_id:={_cfg["wrist_roll_motor_id"]}'
+        f' gripper_motor_id:={_cfg["gripper_motor_id"]}'
+        f' sts3215_max_vel_steps:={_cfg["sts3215_max_vel_steps"]}'
+        f' internal_max_vel:={_cfg["internal_max_vel"]}'
+        f' internal_max_acc:={_cfg["internal_max_acc"]}'
+        f' internal_acc_coeff:={_cfg["internal_acc_coeff"]}'
+        f' p_coefficient:={_cfg["p_coefficient"]}'
+        f' d_coefficient:={_cfg["d_coefficient"]}'
+        f' i_coefficient:={_cfg["i_coefficient"]}'
+        f' deadband:={_cfg["deadband"]}'
+    )
     if effective_hw_type != 'real':
         xacro_cmd += f' ros2_control_hardware_type:={effective_hw_type}'
     if effective_hw_type == 'mujoco':

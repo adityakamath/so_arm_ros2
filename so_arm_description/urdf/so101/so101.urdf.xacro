@@ -10,6 +10,20 @@
   <xacro:arg name="use_sync_write" default="${use_sync_write}"/>
   <xacro:arg name="arm_operating_mode"     default="${arm_operating_mode}"/>     <!-- 0=Position 1=Velocity 2=PWM; arm joints 1-5; baked at startup -->
   <xacro:arg name="gripper_operating_mode" default="${gripper_operating_mode}"/> <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
+  <xacro:arg name="shoulder_pan_motor_id" default="${shoulder_pan_motor_id}"/>
+  <xacro:arg name="shoulder_lift_motor_id" default="${shoulder_lift_motor_id}"/>
+  <xacro:arg name="elbow_flex_motor_id" default="${elbow_flex_motor_id}"/>
+  <xacro:arg name="wrist_flex_motor_id" default="${wrist_flex_motor_id}"/>
+  <xacro:arg name="wrist_roll_motor_id" default="${wrist_roll_motor_id}"/>
+  <xacro:arg name="gripper_motor_id" default="${gripper_motor_id}"/>
+  <xacro:arg name="sts3215_max_vel_steps" default="${sts3215_max_vel_steps}"/>
+  <xacro:arg name="internal_max_vel" default="${internal_max_vel}"/>
+  <xacro:arg name="internal_max_acc" default="${internal_max_acc}"/>
+  <xacro:arg name="internal_acc_coeff" default="${internal_acc_coeff}"/>
+  <xacro:arg name="p_coefficient" default="${p_coefficient}"/>
+  <xacro:arg name="d_coefficient" default="${d_coefficient}"/>
+  <xacro:arg name="i_coefficient" default="${i_coefficient}"/>
+  <xacro:arg name="deadband" default="${deadband}"/>
 
   <!-- real=STS serial plugin, mujoco=MujocoSystemInterface, mock_components=GenericSystem. -->
   <xacro:arg name="ros2_control_hardware_type" default="real"/>
@@ -496,6 +510,9 @@
         <param name="communication_timeout_ms">100</param>
         <param name="use_sync_write">$(arg use_sync_write)</param>
         <param name="enable_mock_mode">$(arg use_mock)</param>
+        <param name="internal_max_vel">$(arg internal_max_vel)</param>
+        <param name="internal_max_acc">$(arg internal_max_acc)</param>
+        <param name="internal_acc_coeff">$(arg internal_acc_coeff)</param>
         <param name="reset_states_on_activate">true</param>
       </xacro:if>
     </hardware>

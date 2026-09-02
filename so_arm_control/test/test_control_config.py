@@ -65,6 +65,33 @@ class TestControlYaml:
         assert commanded_joints <= jsb_joints
 
 
+# ── urdf_config.yaml ─────────────────────────────────────────────────────────
+
+class TestUrdfConfigYaml:
+
+    def setup_method(self):
+        self.cfg = _load('urdf_config.yaml')
+
+    def test_required_urdf_parameters_present(self):
+        required = (
+            'serial_port', 'baud_rate', 'use_mock', 'use_sync_write',
+            'arm_operating_mode', 'gripper_operating_mode',
+            'shoulder_pan_motor_id', 'shoulder_lift_motor_id', 'elbow_flex_motor_id',
+            'wrist_flex_motor_id', 'wrist_roll_motor_id', 'gripper_motor_id',
+            'sts3215_max_vel_steps', 'internal_max_vel', 'internal_max_acc',
+            'internal_acc_coeff',
+        )
+        for key in required:
+            assert key in self.cfg, f"Missing key '{key}' in urdf_config.yaml"
+
+    def test_sts_hardware_params_are_numeric(self):
+        for key in ('baud_rate', 'shoulder_pan_motor_id', 'shoulder_lift_motor_id',
+                    'elbow_flex_motor_id', 'wrist_flex_motor_id', 'wrist_roll_motor_id',
+                    'gripper_motor_id', 'sts3215_max_vel_steps', 'internal_max_vel',
+                    'internal_max_acc', 'internal_acc_coeff'):
+            assert isinstance(self.cfg[key], int), f"'{key}' must be an integer"
+
+
 # ── joint_trajectory_bridge.yaml ──────────────────────────────────────────────
 
 class TestJointTrajectoryBridgeYaml:

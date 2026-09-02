@@ -7,19 +7,42 @@
   <xacro:property name="use_mock" default="false"/>
   <xacro:property name="use_sync_write" default="true"/>
 
+  <!-- Hardware parameters (override via xacro args from so_arm_control/config/urdf_config.yaml) -->
+  <xacro:arg name="serial_port" default="/dev/ttySERVO"/>
+  <xacro:arg name="baud_rate" default="1000000"/>
+  <xacro:arg name="use_mock" default="false"/>
+  <xacro:arg name="use_sync_write" default="true"/>
+
+  <xacro:arg name="arm_operating_mode" default="0"/>
+  <xacro:arg name="gripper_operating_mode" default="0"/>
+  <xacro:arg name="shoulder_pan_motor_id" default="1"/>
+  <xacro:arg name="shoulder_lift_motor_id" default="2"/>
+  <xacro:arg name="elbow_flex_motor_id" default="3"/>
+  <xacro:arg name="wrist_flex_motor_id" default="4"/>
+  <xacro:arg name="wrist_roll_motor_id" default="5"/>
+  <xacro:arg name="gripper_motor_id" default="6"/>
+  <xacro:arg name="sts3215_max_vel_steps" default="3400"/>
+  <xacro:arg name="internal_max_vel" default="254"/>
+  <xacro:arg name="internal_max_acc" default="254"/>
+  <xacro:arg name="internal_acc_coeff" default="100"/>
+  <xacro:arg name="p_coefficient" default="14"/>
+  <xacro:arg name="d_coefficient" default="24"/>
+  <xacro:arg name="i_coefficient" default="0"/>
+  <xacro:arg name="deadband" default="10"/>
+
   <!-- Motor IDs -->
-  <xacro:property name="shoulder_pan_motor_id" value="1"/>
-  <xacro:property name="shoulder_lift_motor_id" value="2"/>
-  <xacro:property name="elbow_flex_motor_id" value="3"/>
-  <xacro:property name="wrist_flex_motor_id" value="4"/>
-  <xacro:property name="wrist_roll_motor_id" value="5"/>
-  <xacro:property name="gripper_motor_id" value="6"/>
-  <xacro:property name="arm_operating_mode" value="0"/>     <!-- Arm joints 1-5: 0=Position, 1=Velocity, 2=PWM/Effort -->
-  <xacro:property name="gripper_operating_mode" value="0"/> <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
+  <xacro:property name="shoulder_pan_motor_id" value="$(arg shoulder_pan_motor_id)"/>
+  <xacro:property name="shoulder_lift_motor_id" value="$(arg shoulder_lift_motor_id)"/>
+  <xacro:property name="elbow_flex_motor_id" value="$(arg elbow_flex_motor_id)"/>
+  <xacro:property name="wrist_flex_motor_id" value="$(arg wrist_flex_motor_id)"/>
+  <xacro:property name="wrist_roll_motor_id" value="$(arg wrist_roll_motor_id)"/>
+  <xacro:property name="gripper_motor_id" value="$(arg gripper_motor_id)"/>
+  <xacro:property name="arm_operating_mode" value="$(arg arm_operating_mode)"/>     <!-- Arm joints 1-5: 0=Position, 1=Velocity, 2=PWM/Effort -->
+  <xacro:property name="gripper_operating_mode" value="$(arg gripper_operating_mode)"/> <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
 
   <!-- Motor-specific, model-dependent parameter (written to every joint below so different
        STS models could share this bus) -->
-  <xacro:property name="sts_protocol_max_vel_steps" value="65535"/>  <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
+  <xacro:property name="sts_protocol_max_vel_steps" value="$(arg sts3215_max_vel_steps)"/>  <!-- configured model-specific max velocity -->
 
   <!-- Maximum allowable torque/velocity for each motor -->
   <xacro:property name="max_velocity_steps" value="${sts_protocol_max_vel_steps}"/>  <!-- full hardware max -->
@@ -27,11 +50,16 @@
   <xacro:property name="max_torque_nm" value="2.942"/>  <!-- N⋅m (30 kgf⋅cm for STS3215) -->
 
   <!-- Position-mode (Mode 0) internal servo PID, written to EEPROM on activate -->
-  <xacro:property name="p_coefficient" value="14"/>
-  <xacro:property name="d_coefficient" value="24"/>
-  <xacro:property name="i_coefficient" value="0"/>
+  <xacro:property name="p_coefficient" value="$(arg p_coefficient)"/>
+  <xacro:property name="d_coefficient" value="$(arg d_coefficient)"/>
+  <xacro:property name="i_coefficient" value="$(arg i_coefficient)"/>
   <!-- Position insensitive-area (CW_DEAD/CCW_DEAD, both set to this value) -->
-  <xacro:property name="deadband" value="10"/>
+  <xacro:property name="deadband" value="$(arg deadband)"/>
+
+  <!-- EEPROM tuning values written to supported STS firmware registers -->
+  <xacro:property name="internal_max_vel" value="$(arg internal_max_vel)"/>
+  <xacro:property name="internal_max_acc" value="$(arg internal_max_acc)"/>
+  <xacro:property name="internal_acc_coeff" value="$(arg internal_acc_coeff)"/>
 
   <!-- Joint limits -->
   <xacro:property name="shoulder_pan_lower" value="-2"/>

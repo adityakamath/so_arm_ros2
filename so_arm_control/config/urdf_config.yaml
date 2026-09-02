@@ -1,0 +1,24 @@
+serial_port: /dev/ttySERVO
+baud_rate: 1000000
+use_mock: false
+use_sync_write: true
+
+arm_operating_mode: 0
+gripper_operating_mode: 0
+
+shoulder_pan_motor_id: 1
+shoulder_lift_motor_id: 2
+elbow_flex_motor_id: 3
+wrist_flex_motor_id: 4
+wrist_roll_motor_id: 5
+gripper_motor_id: 6
+
+sts3215_max_vel_steps: 3400
+internal_max_vel: 254
+internal_max_acc: 254
+internal_acc_coeff: 100
+
+p_coefficient: 14
+d_coefficient: 24
+i_coefficient: 0
+deadband: 10
