@@ -41,9 +41,10 @@
   <exec_depend>so_arm_description</exec_depend>
   <exec_depend>sts_hardware_interface</exec_depend>
 
-  <!-- ros2_control_hardware_type:="mujoco" only - this package starts
-       mujoco_ros2_control's own ros2_control_node directly, which also hosts the MuJoCo
-       simulation itself. -->
+  <!-- ros2_control_hardware_type:="mujoco" only - so_arm_mujoco for mjcf/so_arm.mjcf.xacro
+       (the MJCF model moved there), mujoco_ros2_control for the ros2_control_node that starts
+       and hosts the MuJoCo simulation itself. -->
+  <exec_depend>so_arm_mujoco</exec_depend>
   <exec_depend>mujoco_ros2_control</exec_depend>
 
   <test_depend>ament_flake8</test_depend>

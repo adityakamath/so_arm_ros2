@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Single-arm SO-ARM bringup: composes so_arm_control's control.launch.py + teleop.launch.py
 with so_arm_bringup's own record_replay.launch.py and (wrist_camera:=true + real hardware
-only) wrist_camera.launch.py. wrist_camera_urdf separately gates the URDF-side mount/links."""
++ wrist_camera_urdf:=true) wrist_camera.launch.py. wrist_camera_urdf also gates the
+URDF-side mount/links, and disabling it implies no camera node either."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -80,14 +81,15 @@ def generate_launch_description():
             description=(
                 'Launch wrist_camera_node (real hardware only). Set false if this arm has no '
                 'wrist camera fitted, to skip it entirely rather than rely on its own '
-                'no-camera-detected graceful exit.'
+                'no-camera-detected graceful exit. Forced off when wrist_camera_urdf is false.'
             ),
         ),
         DeclareLaunchArgument(
             'wrist_camera_urdf', default_value='true',
             description=(
                 'so101 only: false omits the wrist camera mount/links/joints from '
-                'robot_description entirely (independent of the wrist_camera arg above).'
+                'robot_description, and also disables wrist_camera_node - no mount means no '
+                'camera to talk to.'
             ),
         ),
     ]
@@ -113,11 +115,13 @@ def generate_launch_description():
         launch_arguments={'replay_loops': replay_loops}.items(),
     )
     # Gated here, not in control.launch.py (a camera isn't control) - mock/mujoco has no camera.
+    # Also requires wrist_camera_urdf:=true - no mount in the URDF means no camera to talk to.
     wrist_camera_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(wrist_camera_launch),
         condition=IfCondition(PythonExpression([
             "'", wrist_camera, "' == 'true' and '",
-            ros2_control_hardware_type, "' == 'real'",
+            ros2_control_hardware_type, "' == 'real' and '",
+            wrist_camera_urdf, "' == 'true'",
         ])),
     )
 

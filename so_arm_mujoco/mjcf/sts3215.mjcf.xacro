@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- STS3215 MuJoCo actuator/joint defaults, shared by so100 and so101 (see so_arm.mjcf.xacro). -->
+<mujoco xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <default class="sts3215">
+    <!-- Identified from real STS3215 (12V) trajectories via Rhoban's BAM project
+         (github.com/Rhoban/bam), model "m1", params/feetech_sts3215_12V/m1.json (PR #5).
+         Derived with bam.to_mujoco's own voltage_controlled_to_mujoco formula, corrected to
+         fold in error_gain_ratio (the per-unit gain correction STS3215Actuator.compute_control
+         actually applies - bam.to_mujoco's static export omits it, a known gap in that
+         deprecated tool). kp/error_gain/max_pwm=32/0.166/0.97 are STS3215Actuator's firmware
+         constants (fixed across supply voltages); vin=12 for this identified variant. -->
+    <joint damping="1.057835" frictionloss="0.195871" armature="0.032460"/>
+    <position kp="42.911886" kv="0.0" forcerange="-8.537717 8.537717"/>
+    <default class="visual">
+      <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
+    </default>
+    <default class="collision">
+      <geom type="mesh" group="3" material="transparent"/>
+    </default>
+  </default>
+</mujoco>

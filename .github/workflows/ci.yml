@@ -94,7 +94,7 @@ jobs:
         # ros2_control_hardware_type:=mujoco emits the right <plugin> text, they don't load it.
         run: |
           . /opt/ros/${{ matrix.ros_distro }}/setup.sh
-          colcon build --packages-select so_arm_control so_arm_bringup so_arm_description sts_hardware_interface
+          colcon build --packages-select so_arm_control so_arm_bringup so_arm_description so_arm_mujoco sts_hardware_interface
 
       - name: pytest (so_arm_control)
         # One pytest invocation PER FILE, not one for the whole directory: pinocchio
@@ -139,3 +139,16 @@ jobs:
           . install/setup.sh
           cd src/so_arm_ros2/so_arm_description/test
           pytest test_urdf_xacro.py
+
+      - name: pytest (so_arm_mujoco)
+        # mujoco/gymnasium pull their own numpy - installed last (--user, --ignore-installed,
+        # same ABI-isolation pattern as so_arm_control's step above) so they can't shadow the
+        # numpy pinocchio needs in the earlier steps.
+        run: |
+          . /opt/ros/${{ matrix.ros_distro }}/setup.sh
+          . install/setup.sh
+          pip install --break-system-packages --user --ignore-installed \
+            -r src/so_arm_ros2/so_arm_mujoco/requirements.txt \
+            -r src/so_arm_ros2/so_arm_mujoco/requirements-gym.txt
+          cd src/so_arm_ros2/so_arm_mujoco/test
+          pytest

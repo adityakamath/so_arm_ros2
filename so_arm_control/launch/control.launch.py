@@ -26,6 +26,7 @@ def launch_setup(context):
     use_sim_time = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
     effective_hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
+    scene = LaunchConfiguration('scene').perform(context)
     frame_prefix = LaunchConfiguration('frame_prefix').perform(context)
     wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf').perform(context)
 
@@ -35,8 +36,10 @@ def launch_setup(context):
 
     # MJCF must land on disk (mesh paths are filesystem-based), unlike robot_description below.
     if effective_hw_type == 'mujoco':
+        pkg_mujoco = FindPackageShare('so_arm_mujoco').perform(context)
         mjcf_xml = subprocess.run(
-            [xacro, f'{pkg_desc}/mjcf/so_arm.mjcf.xacro', f'so_arm_config:={model}'],
+            [xacro, f'{pkg_mujoco}/mjcf/so_arm.mjcf.xacro', f'so_arm_config:={model}',
+             f'scene:={scene}'],
             capture_output=True, text=True, check=True,
         ).stdout
         mjcf_file = tempfile.NamedTemporaryFile(
@@ -176,6 +179,14 @@ def generate_launch_description():
             'mujoco_headless',
             default_value='false',
             description='mujoco only: suppress viewer window.',
+        ),
+        DeclareLaunchArgument(
+            'scene',
+            default_value='true',
+            description=(
+                'mujoco only: false omits the built-in free-standing scene '
+                '(skybox/floor/lighting), e.g. to compose the arm into an external scene.'
+            ),
         ),
         DeclareLaunchArgument(
             'frame_prefix',

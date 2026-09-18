@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Smoke tests for so_arm_description's URDF/MJCF xacro files.
+Smoke tests for so_arm_description's URDF xacro files.
 
-Pure xacro-processing + XML-structure checks: no ROS graph, no rclpy, no nodes. Runs `xacro`
-as a subprocess and inspects its output, the same way so_arm_control's conftest.py does for its
-so101_robot_description fixture.
+MJCF xacro tests live in so_arm_mujoco/test/test_simulation.py - the MJCF model itself moved
+to that package. Pure xacro-processing + XML-structure checks: no ROS graph, no rclpy, no
+nodes. Runs `xacro` as a subprocess and inspects its output, the same way so_arm_control's
+conftest.py does for its so101_robot_description fixture.
 """
 
 import os
@@ -115,27 +116,3 @@ def test_position_operating_mode_is_default(model):
             f'{model}: {joint.get("name")} command interfaces {cmd_interfaces} '
             "!= {'position', 'velocity'} under the default operating mode"
         )
-
-
-# ── MJCF xacro ──────────────────────────────────────────────────────────────
-
-@pytest.mark.parametrize('model', _MODELS)
-@pytest.mark.parametrize('standalone', ('true', 'false'))
-def test_mjcf_processes_to_valid_xml(model, standalone):
-    mjcf_file = os.path.join(_SHARE, 'mjcf', 'so_arm.mjcf.xacro')
-    root = ET.fromstring(_run_xacro(
-        mjcf_file, f'so_arm_config:={model}', f'standalone:={standalone}',
-    ))
-    assert root.tag == 'mujoco'
-    assert root.find('worldbody') is not None or standalone == 'false'
-
-
-@pytest.mark.parametrize('model', _MODELS)
-def test_mjcf_referenced_meshes_exist_on_disk(model):
-    mjcf_file = os.path.join(_SHARE, 'mjcf', 'so_arm.mjcf.xacro')
-    root = ET.fromstring(_run_xacro(mjcf_file, f'so_arm_config:={model}'))
-    meshes = root.findall('asset/mesh')
-    assert meshes, f'{model}: no <mesh> assets found in MJCF'
-    for mesh in meshes:
-        file_ref = mesh.get('file')
-        assert file_ref and os.path.isfile(file_ref), f'{model}: missing MJCF mesh {file_ref}'

@@ -4,7 +4,7 @@
      Usage: xacro so_arm.mjcf.xacro so_arm_config:=so101 > /tmp/so_arm.xml -->
 <mujoco xmlns:xacro="http://www.ros.org/wiki/xacro" model="so_arm">
   <xacro:arg name="so_arm_config" default="so101"/>
-  <xacro:arg name="standalone" default="true"/>
+  <xacro:arg name="scene" default="true"/>
   <!-- so101 only; mirrors urdf's wrist_camera_urdf arg. False omits the camera bodies below. -->
   <xacro:arg name="wrist_camera_mjcf" default="true"/>
   <xacro:property name="so_arm_config" value="$(arg so_arm_config)"/>
@@ -19,16 +19,7 @@
   </asset>
 
   <default>
-    <default class="sts3215">
-      <joint damping="0.60" frictionloss="0.052" armature="0.028"/>
-      <position kp="17.8" kv="0.0" forcerange="-3.35 3.35"/>
-      <default class="visual">
-        <geom type="mesh" contype="0" conaffinity="0" density="0" group="2"/>
-      </default>
-      <default class="collision">
-        <geom type="mesh" group="3" material="transparent"/>
-      </default>
-    </default>
+    <xacro:include filename="$(find so_arm_mujoco)/mjcf/sts3215.mjcf.xacro"/>
   </default>
 
   <actuator>
@@ -122,19 +113,19 @@
       </body>
     </xacro:macro>
 
-    <xacro:if value="${'$(arg standalone)' == 'true'}">
-      <contact>
-        <exclude body1="base_link" body2="shoulder_link"/>
-        <exclude body1="shoulder_link" body2="upper_arm_link"/>
-        <exclude body1="upper_arm_link" body2="lower_arm_link"/>
-        <exclude body1="lower_arm_link" body2="wrist_link"/>
-        <exclude body1="wrist_link" body2="gripper_link"/>
-        <exclude body1="gripper_link" body2="moving_jaw_link"/>
-      </contact>
-      <worldbody>
-        <xacro:so_arm100_body/>
-      </worldbody>
-    </xacro:if>
+    <!-- Arm body itself: always present, independent of $(arg scene) - only the decorative
+         free-standing scene (floor/skybox/lighting, below) is scene-gated. -->
+    <contact>
+      <exclude body1="base_link" body2="shoulder_link"/>
+      <exclude body1="shoulder_link" body2="upper_arm_link"/>
+      <exclude body1="upper_arm_link" body2="lower_arm_link"/>
+      <exclude body1="lower_arm_link" body2="wrist_link"/>
+      <exclude body1="wrist_link" body2="gripper_link"/>
+      <exclude body1="gripper_link" body2="moving_jaw_link"/>
+    </contact>
+    <worldbody>
+      <xacro:so_arm100_body/>
+    </worldbody>
   </xacro:if>
 
   <xacro:if value="${so_arm_config == 'so101'}">
@@ -151,7 +142,7 @@
       <mesh name="sts3215_03a_no_horn_v1" file="$(find so_arm_description)/meshes/so101/sts3215_03a_no_horn_v1.stl"/>
       <mesh name="wrist_roll_pitch_so101_v2" file="$(find so_arm_description)/meshes/so101/wrist_roll_pitch_so101_v2.stl"/>
       <mesh name="wrist_roll_follower_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_roll_follower_so101_v1.stl"/>
-      <mesh name="wrist_camera_mount_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_mount_so101_v1.stl"/>
+      <mesh name="wrist_camera_mount_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_mount_so101_v1.stl" scale="0.001 0.001 0.001"/>
       <mesh name="wrist_camera_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_so101_v1.stl"/>
       <mesh name="moving_jaw_so101_v1" file="$(find so_arm_description)/meshes/so101/moving_jaw_so101_v1.stl"/>
     </asset>
@@ -282,28 +273,28 @@
       </body>
     </xacro:macro>
 
-    <xacro:if value="${'$(arg standalone)' == 'true'}">
-      <contact>
-        <exclude body1="base_link" body2="shoulder_link"/>
-        <exclude body1="shoulder_link" body2="upper_arm_link"/>
-        <exclude body1="upper_arm_link" body2="lower_arm_link"/>
-        <exclude body1="lower_arm_link" body2="wrist_link"/>
-        <exclude body1="wrist_link" body2="gripper_link"/>
-        <exclude body1="gripper_link" body2="moving_jaw_link"/>
-        <xacro:if value="${'$(arg wrist_camera_mjcf)' == 'true'}">
-          <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
-          <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
-          <exclude body1="gripper_link" body2="wrist_camera_body_link"/>
-        </xacro:if>
-      </contact>
-      <worldbody>
-        <xacro:so_arm101_body/>
-      </worldbody>
-    </xacro:if>
+    <!-- Arm body itself: always present, independent of $(arg scene) - only the decorative
+         free-standing scene (floor/skybox/lighting, below) is scene-gated. -->
+    <contact>
+      <exclude body1="base_link" body2="shoulder_link"/>
+      <exclude body1="shoulder_link" body2="upper_arm_link"/>
+      <exclude body1="upper_arm_link" body2="lower_arm_link"/>
+      <exclude body1="lower_arm_link" body2="wrist_link"/>
+      <exclude body1="wrist_link" body2="gripper_link"/>
+      <exclude body1="gripper_link" body2="moving_jaw_link"/>
+      <xacro:if value="${'$(arg wrist_camera_mjcf)' == 'true'}">
+        <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
+        <exclude body1="gripper_link" body2="wrist_camera_body_link"/>
+      </xacro:if>
+    </contact>
+    <worldbody>
+      <xacro:so_arm101_body/>
+    </worldbody>
   </xacro:if>
 
-  <!-- Compares $(arg standalone) directly - xacro auto-coerces bridged properties to Python bool. -->
-  <xacro:if value="${'$(arg standalone)' == 'true'}">
+  <!-- Compares $(arg scene) directly - xacro auto-coerces bridged properties to Python bool. -->
+  <xacro:if value="${'$(arg scene)' == 'true'}">
     <statistic center="0.1 -0.01 0.05" extent="0.5"/>
 
     <visual>

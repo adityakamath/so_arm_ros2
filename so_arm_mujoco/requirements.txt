@@ -1,0 +1,2 @@
+mujoco>=3.0
+glfw>=2.0  # teleop.py: raw key-state tracking (Shift+Arrow) beyond mujoco.viewer's simple key_callback
