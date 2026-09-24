@@ -11,7 +11,13 @@ from pathlib import Path
 
 import mujoco
 
-from so_arm_mujoco.simulation import VALID_MODELS, Simulation, build_model_xml
+from so_arm_mujoco.simulation import (
+    VALID_MODELS,
+    Simulation,
+    build_model_xml,
+    committed_mjcf_path,
+    committed_model_xml,
+)
 
 
 def _build_sim(model: str, wrist_camera: bool) -> Simulation:
@@ -27,17 +33,48 @@ def run_headless(model: str, steps: int = 200, wrist_camera: bool = True) -> dic
     return sim.info()
 
 
+# Two label/value columns, like MuJoCo's own built-in Info overlay - set_texts' 3rd/4th tuple
+# fields render as left/right-aligned columns, not one run-on wrapped line.
+CONTROL_LABELS = 'Joints\nE-Stop'
+CONTROL_VALUES = "Right sidebar's Control panel\nSpace"
+STATUS_LABELS = 'Model\nTime\nStatus'
+
+
 def run_interactive(model: str, wrist_camera: bool = True):
     import time
 
+    import glfw
     import mujoco.viewer
 
+    from so_arm_mujoco.keyboard import EStop, HeldKeys
+
     sim = _build_sim(model, wrist_camera)
-    with mujoco.viewer.launch_passive(sim.model, sim.data) as viewer:
+
+    message = 'Held-key input attached (space=e-stop)'
+    keys = HeldKeys({glfw.KEY_SPACE}, edge_keys={glfw.KEY_SPACE}, attached_message=message)
+    estop = EStop(sim.model)
+
+    with mujoco.viewer.launch_passive(sim.model, sim.data, key_callback=keys.bootstrap) as viewer:
         while viewer.is_running():
             step_start = time.time()
+            while not keys.events.empty():
+                if keys.events.get() == glfw.KEY_SPACE:
+                    estop.toggle(sim)
+
+            # data.ctrl is never touched here - e-stopped, its gain/damping are already zeroed
+            # so ctrl is irrelevant; otherwise the viewer's own "Control" sidebar sliders
+            # (per-actuator ctrl inputs) drive the arm directly, not overwritten every frame.
             sim.step(count=1)
+
             viewer.sync()
+            status = 'E-STOP' if estop.tripped else 'Manual'
+            viewer.set_texts([
+                (mujoco.mjtFontScale.mjFONTSCALE_150, mujoco.mjtGridPos.mjGRID_TOPLEFT,
+                 STATUS_LABELS, f'{model}\n{sim.data.time:.1f} s\n{status}'),
+                (mujoco.mjtFontScale.mjFONTSCALE_150, mujoco.mjtGridPos.mjGRID_BOTTOMLEFT,
+                 CONTROL_LABELS, CONTROL_VALUES),
+            ])
+
             remaining = sim.model.opt.timestep - (time.time() - step_start)
             if remaining > 0:
                 time.sleep(remaining)
@@ -50,7 +87,20 @@ def build_main(argv=None):
     parser.add_argument('--no-wrist-camera', action='store_true')
     parser.add_argument('--bridged', action='store_true', help='Omit the free-standing scene')
     parser.add_argument('--description-package', type=str, default=None)
+    parser.add_argument(
+        '--commit', action='store_true',
+        help='Rewrite every committed mjcf/<model>.xml in place (ignores the other flags); '
+             'run this after any mjcf/*.xacro or URDF change',
+    )
     args = parser.parse_args(argv)
+
+    if args.commit:
+        for model in VALID_MODELS:
+            path = committed_mjcf_path(model)
+            path.write_text(committed_model_xml(
+                model, description_share=args.description_package))
+            print(f'Wrote {path}')
+        return
 
     xml = build_model_xml(
         args.model,

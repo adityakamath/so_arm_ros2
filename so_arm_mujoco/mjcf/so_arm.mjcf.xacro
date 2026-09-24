@@ -10,7 +10,11 @@
   <xacro:property name="so_arm_config" value="$(arg so_arm_config)"/>
 
   <compiler angle="radian"/>
-  <option cone="elliptic" impratio="10"/>
+  <!-- implicitfast trades a bit of speed for much better stability on stiff position actuators
+       like the STS3215 servos below - Euler (MuJoCo's default) needs a much smaller timestep to
+       stay stable at these gains, which is what drove the steady-state tracking error fights in
+       teleop_ik.py before this was pinned down explicitly. -->
+  <option timestep="0.002" integrator="implicitfast" iterations="60" cone="elliptic" impratio="10"/>
 
   <asset>
     <material name="light_grey" rgba="0.8 0.8 0.8 1.0"/>
@@ -97,7 +101,12 @@
                   <geom mesh="Fixed_Jaw_Motor" material="charcoal" class="visual" quat="0.707107 0.707107 0 0"/>
 
                   <!-- TCP marker, matches URDF's end_effector_joint; estimated, not calibrated. -->
-                  <site group="5" name="end_effector_link" pos="0.0025 0.0 -0.106" quat="0.707107 0 0.707107 0"/>
+                  <!-- rgba alpha=0: this is a kinematic reference frame (CONNECT-constraint
+                       anchor, ee_pose()), not something meant to be looked at - invisible
+                       regardless of the viewer's own site-group visibility toggle, rather than
+                       relying on group=5 being off by the viewer's own (overridable) default. -->
+                  <site group="5" name="end_effector_link" pos="0.0025 0.0 -0.106"
+                        quat="0.707107 0 0.707107 0" rgba="0 0 0 0"/>
 
                   <body name="moving_jaw_link" pos="-0.0202 0 -0.0244" quat="0 0 0.707107 0.707107">
                     <joint name="gripper_joint" axis="0 0 1" range="-0.2 2.0" class="sts3215"/>
@@ -148,6 +157,21 @@
     </asset>
 
     <!-- Ported from ros2_so_arm's so_arm101.xml, verified against our URDF (gripper_joint recomputed below). -->
+    <!-- Every joint below is axis="0 0 -1", and must stay that way. They were all "0 0 1"
+         until a URDF cross-check caught it, which silently sign-flipped sim joint values
+         against so101.urdf - and so against the real servos through sts_hardware_interface,
+         which nothing in so_arm_control compensates for. so100 never had the problem.
+
+         Note this is NOT simply copying so101.urdf's axis attributes: the URDF gives
+         shoulder_pan "0 0 1" and the other five "0 0 -1". What has to match is the *world*
+         rotation axis, and some bodies here don't share the URDF link's frame (shoulder_link
+         is turned 180 degrees), so an axis written in this file's frame can need the opposite
+         sign to produce the same physical rotation. The rule, which test_urdf_agreement.py
+         enforces directly:
+             axis_mjcf = R_body_mjcf^T . (R_link_urdf . axis_urdf)
+         Re-deriving that for so101 gives "0 0 -1" six times over. Do not "tidy" these to match
+         the URDF text - that re-breaks sim-to-real. If a teleop direction needs reversing,
+         negate it in teleop_ik.py, where the compensation is visible and tested. -->
     <xacro:macro name="so_arm101_body">
       <body name="base_link">
         <inertial pos="0.0137179 -5.19711e-05 0.0334843" mass="0.147"
@@ -162,7 +186,7 @@
               mesh="waveshare_mounting_plate_so101_v2" material="light_grey"/>
 
         <body name="shoulder_link" pos="0.0388353 -8.97657e-09 0.0624" quat="0 0 -1 0">
-          <joint axis="0 0 1" name="shoulder_pan_joint" range="-1.91986 1.91986" class="sts3215"/>
+          <joint axis="0 0 -1" name="shoulder_pan_joint" range="-1.91986 1.91986" class="sts3215"/>
           <inertial pos="-0.0307604 -1.66727e-05 -0.0252713" mass="0.100006"
                     fullinertia="8.3759e-05 8.10403e-05 2.39783e-05 7.55525e-08 -1.16342e-06 1.54663e-07"/>
           <geom class="visual" pos="-0.0303992 0.000422241 -0.0417" quat="0.5 0.5 0.5 -0.5"
@@ -179,7 +203,7 @@
                 mesh="rotation_pitch_so101_v1" material="light_grey"/>
 
           <body name="upper_arm_link" pos="-0.0303992 -0.0182778 -0.0542" quat="0.5 -0.5 -0.5 -0.5">
-            <joint axis="0 0 1" name="shoulder_lift_joint" range="-1.74533 1.74533" class="sts3215"/>
+            <joint axis="0 0 -1" name="shoulder_lift_joint" range="-1.74533 1.74533" class="sts3215"/>
             <inertial pos="-0.0898471 -0.00838224 0.0184089" mass="0.103"
                       fullinertia="4.08002e-05 0.000147318 0.000142487 -1.97819e-05 -4.03016e-08 8.97326e-09"/>
             <geom class="visual" pos="-0.11257 -0.0155 0.0187" quat="0 -0.707107 0.707107 0"
@@ -192,7 +216,7 @@
                   mesh="upper_arm_so101_v1" material="light_grey"/>
 
             <body name="lower_arm_link" pos="-0.11257 -0.028 0" quat="0.707107 0 0 0.707107">
-              <joint axis="0 0 1" name="elbow_flex_joint" range="-1.69 1.69" class="sts3215"/>
+              <joint axis="0 0 -1" name="elbow_flex_joint" range="-1.69 1.69" class="sts3215"/>
               <inertial pos="-0.0980701 0.00324376 0.0182831" mass="0.104"
                         fullinertia="2.87438e-05 0.000159844 0.00014529 7.41152e-06 1.26409e-06 -4.90188e-08"/>
               <geom class="visual" pos="-0.0648499 -0.032 0.0182" quat="0 1 0 0"
@@ -209,7 +233,7 @@
                     mesh="sts3215_03a_v1" material="charcoal"/>
 
               <body name="wrist_link" pos="-0.1349 0.0052 0" quat="0.707388 0 0 -0.706825">
-                <joint axis="0 0 1" name="wrist_flex_joint" range="-1.65806 1.65806" class="sts3215"/>
+                <joint axis="0 0 -1" name="wrist_flex_joint" range="-1.65806 1.65806" class="sts3215"/>
                 <inertial pos="-0.000103312 -0.0386143 0.0281156" mass="0.079"
                           fullinertia="3.68263e-05 2.5391e-05 2.1e-05 1.7893e-08 -5.28128e-08 3.6412e-06"/>
                 <geom class="visual" pos="0 -0.0424 0.0306" quat="0.5 0.5 0.5 -0.5"
@@ -223,7 +247,7 @@
 
                 <!-- quat carries so101_new_calib.xml's wrist_roll calibration offset (matches URDF). -->
                 <body name="gripper_link" pos="0 -0.0611 0.0181" quat="0.0172091 -0.0172091 0.706897 0.706897">
-                  <joint axis="0 0 1" name="wrist_roll_joint" range="-2.74385 2.84121" class="sts3215"/>
+                  <joint axis="0 0 -1" name="wrist_roll_joint" range="-2.74385 2.84121" class="sts3215"/>
                   <inertial pos="0.000213627 0.000245138 -0.025187" mass="0.087"
                             fullinertia="2.75087e-05 4.33657e-05 3.45059e-05 -3.35241e-07 -5.7352e-06 -5.17847e-08"/>
                   <geom class="visual" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 0 0"
@@ -249,15 +273,43 @@
                           mesh="wrist_camera_so101_v1" material="charcoal"/>
                         <geom class="collision" pos="0 0 0" quat="1 0 0 0"
                           mesh="wrist_camera_so101_v1" material="charcoal"/>
+
+                        <!-- Derived from the URDF's wrist_camera_optical_frame, not guessed.
+                             The URDF hangs wrist_camera_frame directly off gripper_link, while
+                             MuJoCo needs the camera nested under wrist_camera_body_link - so
+                             the URDF chain is rebased onto this body rather than copied:
+                               T_body_optical = inv(T_grip_mount . T_mount_body)
+                                                . T_grip_frame . T_frame_optical
+                             using so101.common.xacro's wrist_camera_{mount,body,frame}_* and
+                             wrist_camera_optical_rpy (URDF fixed-axis XYZ rpy). That chain
+                             reproduces this file's own mount/body quats to 6 decimals, which
+                             is what confirms the convention is right. Final term converts
+                             REP-103 optical (+Z fwd, +Y down) to MuJoCo's camera convention
+                             (-Z fwd, +Y up): a 180deg turn about the optical frame's own X,
+                             hence quat ~ (0,-1,0,0); the small w/z terms carry the -0.0008 rad
+                             yaw the real mount has. pos lands 14.1mm along this body's +Z -
+                             an earlier revision put it 30mm along +Y instead, which is what
+                             left the rendered frustum visibly offset from the lens mesh.
+                             fovy=86.67 derived from wrist_camera_calibration.yaml's fy=508.7 at
+                             960px height: 2*atan((960/2)/508.7). Resolution downscaled from the
+                             real 1280x960 capture - full-res offscreen rendering every sim step
+                             isn't worth the cost for a placeholder FOV/calibration. -->
+                        <camera name="wrist_cam" fovy="86.67" resolution="640 480"
+                                pos="0 -0.0000395 0.0141025"
+                                quat="0.00155434 -0.99999879 0 0.00000597"/>
                       </body>
                     </body>
                   </xacro:if>
-                  <!-- Matches URDF's end_effector_joint rpy, unlike ros2_so_arm's MJCF site. -->
-                  <site group="5" name="end_effector_link" pos="-0.0079 -0.000218121 -0.0981274" quat="0.707105 0 0.707108 0"/>
+                  <!-- Matches URDF's end_effector_joint rpy, unlike ros2_so_arm's MJCF site.
+                       rgba alpha=0: kinematic reference frame, not meant to be looked at - see
+                       the so100 branch's site above for why this is invisible outright rather
+                       than relying on the viewer's (overridable) group=5 default. -->
+                  <site group="5" name="end_effector_link" pos="-0.0079 -0.000218121 -0.0981274"
+                        quat="0.707105 0 0.707108 0" rgba="0 0 0 0"/>
 
                   <!-- Recomputed from our own gripper_rpy (no pitch offset), unlike ros2_so_arm's macro. -->
                   <body name="moving_jaw_link" pos="0.0202 0.0188 -0.0234" quat="0.707105 0.707108 0 0">
-                    <joint axis="0 0 1" name="gripper_joint" range="-0.174533 1.74533" class="sts3215"/>
+                    <joint axis="0 0 -1" name="gripper_joint" range="-1.74533 0.174533" class="sts3215"/>
                     <inertial pos="-0.00157495 -0.0300244 0.0192755" mass="0.012"
                               fullinertia="6.61427e-06 1.89032e-06 5.28738e-06 -3.19807e-07 -5.90717e-09 -1.09945e-07"/>
                     <geom class="visual" pos="0 0 0.0189" quat="1 0 0 0"
@@ -301,6 +353,12 @@
       <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
       <rgba haze="0.15 0.25 0.35 1"/>
       <global azimuth="45" elevation="-20"/>
+      <!-- How far the wrist_cam frustum is *drawn* when the viewer's Camera visualization is
+           on - purely cosmetic, unrelated to the camera's actual fovy/calibration or to what
+           it renders. MuJoCo's default (10) is well past saturation at this model's 0.5m
+           extent, so the frustum swamps the arm; 2 keeps it legible at roughly half the
+           on-screen footprint. Lower it further (1 is small but still visible) to taste. -->
+      <scale frustum="2"/>
     </visual>
 
     <asset>

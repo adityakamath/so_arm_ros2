@@ -11,9 +11,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        ('share/' + package_name + '/mjcf', glob('mjcf/*.xacro')),
-        ('share/' + package_name + '/mjcf/so100', glob('mjcf/so100/*.xml')),
-        ('share/' + package_name + '/mjcf/so101', glob('mjcf/so101/*.xml')),
+        ('share/' + package_name + '/mjcf', glob('mjcf/*.xacro') + glob('mjcf/*.xml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -34,6 +32,7 @@ setup(
             'mujoco_preview = so_arm_mujoco.cli:preview_main',
             'build_mujoco_models = so_arm_mujoco.cli:build_main',
             'teleop_ik = so_arm_mujoco.teleop_ik:teleop_main',
+            'benchmark_mujoco = so_arm_mujoco.benchmark_mujoco:main',
         ],
     },
 )

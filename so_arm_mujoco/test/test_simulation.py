@@ -64,6 +64,22 @@ def test_build_model_xml_wrist_camera_toggle_changes_body_count():
     assert with_cam.nbody > without_cam.nbody
 
 
+@pytest.mark.parametrize('model_name', ['so100', 'so101'])
+def test_sites_are_invisible(model_name):
+    """Regression: end_effector_link is a kinematic reference frame (ee_pose(), the teleop
+    tracker's CONNECT-constraint anchor), not something meant to be looked at - it previously
+    rendered as an unwanted grey sphere in the viewer once its site-group's visibility got
+    toggled on (a viewer setting, outside this code's control). rgba alpha=0 makes it invisible
+    regardless of that toggle; this guards against a future site losing that rgba (or a new one
+    being added without it) and the sphere silently coming back.
+    """
+    model = mujoco.MjModel.from_xml_string(build_model_xml(model_name))
+
+    for i in range(model.nsite):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_SITE, i)
+        assert model.site_rgba[i][3] == 0, f'site {name!r} is visible (alpha != 0)'
+
+
 # --- Simulation ---
 
 
