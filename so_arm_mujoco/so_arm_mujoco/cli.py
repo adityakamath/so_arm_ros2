@@ -13,6 +13,7 @@ import mujoco
 
 from so_arm_mujoco.simulation import (
     VALID_MODELS,
+    VALID_SCENES,
     Simulation,
     build_model_xml,
     committed_mjcf_path,
@@ -20,15 +21,17 @@ from so_arm_mujoco.simulation import (
 )
 
 
-def _build_sim(model: str, wrist_camera: bool) -> Simulation:
-    xml = build_model_xml(model, wrist_camera=wrist_camera, scene=True)
+def _build_sim(model: str, wrist_camera: bool, scene: str = 'flat') -> Simulation:
+    xml = build_model_xml(model, wrist_camera=wrist_camera, scene=scene)
     sim = Simulation(mujoco.MjModel.from_xml_string(xml))
     sim.reset()
     return sim
 
 
-def run_headless(model: str, steps: int = 200, wrist_camera: bool = True) -> dict:
-    sim = _build_sim(model, wrist_camera)
+def run_headless(
+    model: str, steps: int = 200, wrist_camera: bool = True, scene: str = 'flat',
+) -> dict:
+    sim = _build_sim(model, wrist_camera, scene)
     sim.step(count=steps)
     return sim.info()
 
@@ -40,7 +43,7 @@ CONTROL_VALUES = "Right sidebar's Control panel\nSpace"
 STATUS_LABELS = 'Model\nTime\nStatus'
 
 
-def run_interactive(model: str, wrist_camera: bool = True):
+def run_interactive(model: str, wrist_camera: bool = True, scene: str = 'flat'):
     import time
 
     import glfw
@@ -48,7 +51,7 @@ def run_interactive(model: str, wrist_camera: bool = True):
 
     from so_arm_mujoco.keyboard import EStop, HeldKeys
 
-    sim = _build_sim(model, wrist_camera)
+    sim = _build_sim(model, wrist_camera, scene)
 
     message = 'Held-key input attached (space=e-stop)'
     keys = HeldKeys({glfw.KEY_SPACE}, edge_keys={glfw.KEY_SPACE}, attached_message=message)
@@ -85,7 +88,10 @@ def build_main(argv=None):
     parser.add_argument('--model', choices=VALID_MODELS, default='so101')
     parser.add_argument('--output', type=str, default=None, help='Write compiled XML here')
     parser.add_argument('--no-wrist-camera', action='store_true')
-    parser.add_argument('--bridged', action='store_true', help='Omit the free-standing scene')
+    parser.add_argument(
+        '--scene', choices=VALID_SCENES, default='flat',
+        help="flat (default), arena (graspable cubes/tray), or none (compose externally)",
+    )
     parser.add_argument('--description-package', type=str, default=None)
     parser.add_argument(
         '--commit', action='store_true',
@@ -105,7 +111,7 @@ def build_main(argv=None):
     xml = build_model_xml(
         args.model,
         wrist_camera=not args.no_wrist_camera,
-        scene=not args.bridged,
+        scene=args.scene,
         description_share=args.description_package,
     )
     if args.output:
@@ -119,14 +125,21 @@ def preview_main(argv=None):
     parser = argparse.ArgumentParser(description='Preview an so_arm MJCF model.')
     parser.add_argument('--model', choices=VALID_MODELS, default='so101')
     parser.add_argument('--no-wrist-camera', action='store_true')
+    parser.add_argument(
+        '--scene', choices=VALID_SCENES, default='flat',
+        help="flat (default), arena (graspable cubes/tray), or none (compose externally)",
+    )
     parser.add_argument('--headless', action='store_true', help='No GUI; step and exit')
     parser.add_argument('--steps', type=int, default=200, help='--headless only')
     args = parser.parse_args(argv)
 
     if args.headless:
-        print(run_headless(args.model, steps=args.steps, wrist_camera=not args.no_wrist_camera))
+        print(run_headless(
+            args.model, steps=args.steps, wrist_camera=not args.no_wrist_camera,
+            scene=args.scene,
+        ))
     else:
-        run_interactive(args.model, wrist_camera=not args.no_wrist_camera)
+        run_interactive(args.model, wrist_camera=not args.no_wrist_camera, scene=args.scene)
 
 
 def main():

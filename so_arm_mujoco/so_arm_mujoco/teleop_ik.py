@@ -21,7 +21,7 @@ import mujoco.viewer
 import numpy as np
 
 from so_arm_mujoco.keyboard import EStop, HeldKeys
-from so_arm_mujoco.simulation import VALID_MODELS, Simulation, build_model_xml
+from so_arm_mujoco.simulation import VALID_MODELS, VALID_SCENES, Simulation, build_model_xml
 
 MOVE_RATE = 0.2  # m/s, matches so_arm_control/config/teleop.yaml's twist-linear-{x,y,z} scale
 ROTATE_RATE = 1.5  # rad/s, matches so_arm_control/config/teleop.yaml's twist-angular-x scale
@@ -38,10 +38,12 @@ TELEOP_ATTACHED_MESSAGE = (
 )
 
 
-def _build_teleop_model(model_name: str) -> mujoco.MjModel:
+def _build_teleop_model(model_name: str, scene: str = 'flat') -> mujoco.MjModel:
     """so_arm model + a mocap tracker sphere, connected to the end effector by a MuJoCo
-    equality constraint (MuJoCo's own solver drives the arm toward it - no IK code here)."""
-    xml = build_model_xml(model_name)
+    equality constraint (MuJoCo's own solver drives the arm toward it - no IK code here).
+    scene='arena' is the natural pairing here: graspable cubes and a tray within reach, to
+    actually pick up and move with the tracker/gripper rather than just look at."""
+    xml = build_model_xml(model_name, scene=scene)
     spec = mujoco.MjSpec.from_string(xml)
     spec.modelname = model_name.upper().replace('SO', 'SO-')  # "so101" -> "SO-101": viewer title
 
@@ -144,8 +146,8 @@ JOINT_CONTROL_VALUES = "Right sidebar's Control panel\nSpace\nM (switch to IK)"
 STATUS_LABELS = 'Model\nTime\nMode\nStatus'
 
 
-def run(model_name: str):
-    model = _build_teleop_model(model_name)
+def run(model_name: str, scene: str = 'flat'):
+    model = _build_teleop_model(model_name, scene)
     sim = Simulation(model)
     sim.reset()
 
@@ -238,8 +240,12 @@ def run(model_name: str):
 def teleop_main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model', choices=VALID_MODELS, default='so101')
+    parser.add_argument(
+        '--scene', choices=VALID_SCENES, default='flat',
+        help="flat (default), arena (graspable cubes/tray - try picking one up), or none",
+    )
     args = parser.parse_args(argv)
-    run(args.model)
+    run(args.model, args.scene)
 
 
 if __name__ == '__main__':

@@ -55,10 +55,13 @@ def mujoco_share_dir() -> str:
     return _package_dir('so_arm_mujoco', 'SO_ARM_MUJOCO_SHARE', 'mjcf/so_arm.mjcf.xacro')
 
 
+VALID_SCENES = ('flat', 'arena', 'none')
+
+
 def build_model_xml(
     model: str,
     wrist_camera: bool = True,
-    scene: bool = True,
+    scene: str = 'flat',
     description_share: str = None,
     mujoco_share: str = None,
 ) -> str:
@@ -69,22 +72,26 @@ def build_model_xml(
     this works without a sourced ROS environment - xacro's own `$(find ...)` substitution needs
     ament_index + a built/sourced workspace, which standalone use explicitly should not require.
 
-    `scene=False` omits the free-standing scene (skybox/floor/lighting) - e.g. to compose the
-    arm into an external scene instead.
+    `scene` selects one of the named MJCF scenes in mjcf/scenes/ (`flat`: skybox+floor, the
+    default; `arena`: flat plus a small graspable-cubes-and-tray tabletop workspace, all within
+    SO101's measured reach - see mjcf/scenes/arena.mjcf.xacro) or `'none'` to omit the
+    free-standing scene entirely, e.g. to compose the arm into an external one instead.
 
-    For the defaults (wrist_camera=True, scene=True, no description_share override), this skips
-    the xacro recompile and reads mjcf/<model>.xml directly instead - so100/so101's geometry is
-    fixed (sourced from URDF, which doesn't change), so that committed file doesn't go stale.
-    Any other combination still compiles live via xacro, as before. Regenerate the committed
-    file via `python3 -m so_arm_mujoco.cli build --model <model>` if so_arm.mjcf.xacro (or the
-    URDF it's derived from) ever actually changes.
+    For the defaults (wrist_camera=True, scene='flat', no description_share override), this
+    skips the xacro recompile and reads mjcf/<model>.xml directly instead - so100/so101's
+    geometry is fixed (sourced from URDF, which doesn't change), so that committed file doesn't
+    go stale. Any other combination still compiles live via xacro, as before. Regenerate the
+    committed file via `python3 -m so_arm_mujoco.cli build --model <model>` if so_arm.mjcf.xacro
+    (or the URDF it's derived from) ever actually changes.
     """
     if model not in VALID_MODELS:
         raise ValueError(f'model must be one of {VALID_MODELS}, got {model!r}')
+    if scene not in VALID_SCENES:
+        raise ValueError(f'scene must be one of {VALID_SCENES}, got {scene!r}')
 
     mujoco_dir = mujoco_share or mujoco_share_dir()
 
-    if wrist_camera and scene and description_share is None:
+    if wrist_camera and scene == 'flat' and description_share is None:
         static_path = committed_mjcf_path(model, mujoco_dir)
         if static_path.is_file():
             desc_dir = description_share_dir()
@@ -98,7 +105,7 @@ def build_model_xml(
 
     mappings = {
         'so_arm_config': model,
-        'scene': 'true' if scene else 'false',
+        'scene': scene,
         'wrist_camera_mjcf': 'true' if wrist_camera else 'false',
     }
     doc = xacro.parse(raw)

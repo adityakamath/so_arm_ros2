@@ -41,8 +41,8 @@ class SoArmEnv(gym.Env):
 
     metadata = {'render_modes': []}
 
-    def __init__(self, model: str = 'so101', wrist_camera: bool = True):
-        xml = build_model_xml(model, wrist_camera=wrist_camera, scene=True)
+    def __init__(self, model: str = 'so101', wrist_camera: bool = True, scene: str = 'flat'):
+        xml = build_model_xml(model, wrist_camera=wrist_camera, scene=scene)
         self.sim = Simulation(mujoco.MjModel.from_xml_string(xml))
         self.action_space, self.observation_space = _spaces_for(self.sim.model)
 
@@ -67,8 +67,11 @@ class SoArmVecEnv:
     mj_step itself, is the bottleneck at your N.
     """
 
-    def __init__(self, num_envs: int, model: str = 'so101', wrist_camera: bool = True):
-        xml = build_model_xml(model, wrist_camera=wrist_camera, scene=True)
+    def __init__(
+        self, num_envs: int, model: str = 'so101', wrist_camera: bool = True,
+        scene: str = 'flat',
+    ):
+        xml = build_model_xml(model, wrist_camera=wrist_camera, scene=scene)
         mjmodel = mujoco.MjModel.from_xml_string(xml)
         self.num_envs = num_envs
         self.sims = [Simulation(mjmodel) for _ in range(num_envs)]

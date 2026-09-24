@@ -42,10 +42,15 @@
   <exec_depend>sts_hardware_interface</exec_depend>
 
   <!-- ros2_control_hardware_type:="mujoco" only - so_arm_mujoco for mjcf/so_arm.mjcf.xacro
-       (the MJCF model moved there), mujoco_ros2_control for the ros2_control_node that starts
-       and hosts the MuJoCo simulation itself. -->
+       (the MJCF model moved there) and the plugin yaml in its config/, mujoco_ros2_control for
+       the ros2_control_node that starts and hosts the MuJoCo simulation itself,
+       mujoco_ros2_control_plugins (apt) for the wrist camera plugin, mujoco_ros2_plugins (not
+       vendored - build alongside like sts_hardware_interface, see the top-level README) for the
+       simulated /emergency_stop. Matches pantilt_ros2's pt_control dependency set. -->
   <exec_depend>so_arm_mujoco</exec_depend>
   <exec_depend>mujoco_ros2_control</exec_depend>
+  <exec_depend>mujoco_ros2_control_plugins</exec_depend>
+  <exec_depend>mujoco_ros2_plugins</exec_depend>
 
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

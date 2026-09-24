@@ -1,0 +1,20 @@
+# Loaded alongside mujoco_ros2_control_plugins.yaml only for SO101 + wrist_camera_urdf:=true
+# (see control.launch.py) - so100 has no wrist_cam camera in its MJCF (mjcf/so_arm.mjcf.xacro),
+# and this plugin errors on a camera name with nothing in the model to attach to.
+#
+# Package: mujoco_ros2_control_plugins (apt: ros-<distro>-mujoco-ros2-control-plugins), not
+# mujoco_ros2_plugins - a different, upstream package from the e-stop plugin above.
+#
+# Topics/frame match the real driver (so_arm_bringup's opencv_camera_node + wrist_camera.yaml)
+# so a client can't tell which one it's talking to. No depth_topic: unlike pantilt_ros2's OAK-D,
+# the wrist camera is a plain 2D webcam with no depth stream to simulate.
+/**:
+  ros__parameters:
+    mujoco_plugins:
+      mujoco_camera_plugin:
+        type: "mujoco_ros2_control_plugins/CameraPlugin"
+        camera_publish_rate: 30.0
+        wrist_cam:
+          frame_name: wrist_camera_optical_frame
+          info_topic: /camera_info
+          image_topic: /image_raw

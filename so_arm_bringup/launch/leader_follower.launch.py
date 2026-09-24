@@ -36,11 +36,13 @@ def generate_launch_description():
     leader_use_mock = LaunchConfiguration('leader_use_mock')
     leader_ros2_control_hardware_type = LaunchConfiguration('leader_ros2_control_hardware_type')
     leader_mujoco_headless = LaunchConfiguration('leader_mujoco_headless')
+    leader_mujoco_arena = LaunchConfiguration('leader_mujoco_arena')
 
     follower_serial_port = LaunchConfiguration('follower_serial_port')
     follower_use_mock = LaunchConfiguration('follower_use_mock')
     follower_ros2_control_hardware_type = LaunchConfiguration('follower_ros2_control_hardware_type')
     follower_mujoco_headless = LaunchConfiguration('follower_mujoco_headless')
+    follower_mujoco_arena = LaunchConfiguration('follower_mujoco_arena')
 
     replay_loops = LaunchConfiguration('replay_loops')
 
@@ -75,6 +77,7 @@ def generate_launch_description():
                 'use_mock': leader_use_mock,
                 'ros2_control_hardware_type': leader_ros2_control_hardware_type,
                 'mujoco_headless': leader_mujoco_headless,
+                'mujoco_arena': leader_mujoco_arena,
                 **leader_control_overrides,
             }.items(),
         ),
@@ -110,6 +113,7 @@ def generate_launch_description():
                 'use_mock': follower_use_mock,
                 'ros2_control_hardware_type': follower_ros2_control_hardware_type,
                 'mujoco_headless': follower_mujoco_headless,
+                'mujoco_arena': follower_mujoco_arena,
                 **follower_control_overrides,
             }.items(),
         ),
@@ -174,6 +178,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'follower_mujoco_headless', default_value='false',
             description='mujoco only: suppress viewer window. Follower arm.',
+        ),
+        DeclareLaunchArgument(
+            'leader_mujoco_arena', default_value='false',
+            description='mujoco only: add the tabletop cubes/tray workspace. Leader arm.',
+        ),
+        DeclareLaunchArgument(
+            'follower_mujoco_arena', default_value='false',
+            description='mujoco only: add the tabletop cubes/tray workspace. Follower arm.',
         ),
         DeclareLaunchArgument(
             'replay_loops', default_value='',

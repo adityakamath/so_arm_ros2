@@ -135,10 +135,10 @@
     <rgba haze="0.15 0.25 0.35 1"/>
     <global azimuth="45" elevation="-20"/>
     <!-- How far the wrist_cam frustum is *drawn* when the viewer's Camera visualization is
-           on - purely cosmetic, unrelated to the camera's actual fovy/calibration or to what
-           it renders. MuJoCo's default (10) is well past saturation at this model's 0.5m
-           extent, so the frustum swamps the arm; 2 keeps it legible at roughly half the
-           on-screen footprint. Lower it further (1 is small but still visible) to taste. -->
+         on - purely cosmetic, unrelated to the camera's actual fovy/calibration or to what
+         it renders. MuJoCo's default (10) is well past saturation at this model's 0.5m
+         extent, so the frustum swamps the arm; 2 keeps it legible at roughly half the
+         on-screen footprint. Lower it further (1 is small but still visible) to taste. -->
     <scale frustum="2"/>
   </visual>
   <asset>

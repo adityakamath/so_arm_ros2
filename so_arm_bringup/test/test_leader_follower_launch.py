@@ -92,6 +92,7 @@ class TestDeclaredArgs:
             'leader_use_mock', 'follower_use_mock',
             'leader_ros2_control_hardware_type', 'follower_ros2_control_hardware_type',
             'leader_mujoco_headless', 'follower_mujoco_headless',
+            'leader_mujoco_arena', 'follower_mujoco_arena',
             'replay_loops',
         }
 

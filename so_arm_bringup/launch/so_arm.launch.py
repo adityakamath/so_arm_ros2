@@ -21,6 +21,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     ros2_control_hardware_type = LaunchConfiguration('ros2_control_hardware_type')
     mujoco_headless = LaunchConfiguration('mujoco_headless')
+    mujoco_arena = LaunchConfiguration('mujoco_arena')
     frame_prefix = LaunchConfiguration('frame_prefix')
     replay_loops = LaunchConfiguration('replay_loops')
     wrist_camera = LaunchConfiguration('wrist_camera')
@@ -63,6 +64,13 @@ def generate_launch_description():
             description='mujoco only: suppress viewer window.',
         ),
         DeclareLaunchArgument(
+            'mujoco_arena', default_value='false',
+            description=(
+                'mujoco only: true adds a small tabletop workspace within reach - three '
+                'graspable cubes and a tray - on top of the default flat skybox+floor scene.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'frame_prefix', default_value='',
             description=(
                 'Prefix for all published tf frame_ids (e.g. "leader/"); empty = no prefix, '
@@ -103,6 +111,7 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'ros2_control_hardware_type': ros2_control_hardware_type,
             'mujoco_headless': mujoco_headless,
+            'mujoco_arena': mujoco_arena,
             'frame_prefix': frame_prefix,
             'wrist_camera_urdf': wrist_camera_urdf,
         }.items(),

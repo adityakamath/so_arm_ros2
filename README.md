@@ -5,74 +5,40 @@
 [![Ask DeepWiki (Experimental)](https://deepwiki.com/badge.svg)](https://deepwiki.com/adityakamath/so_arm_ros2)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-> ROS 2 software stack for SO-ARM100 (SO100 and SO101) robot arms.
+ROS 2 software stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). It provides Pinocchio-based Cartesian IK joystick/GUI teleoperation with self-collision checking, gripper control, teach-and-repeat record/replay, an optional wrist camera (SO101), a dual-arm leader-follower mode, and a MuJoCo simulation.
 
 ## ⚠️ Safety
 
-**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. While e-stopped, `teleop_ik_node` tracks the arm's live pose as its target instead of driving toward the pre-e-stop target, so releasing e-stop holds the arm where it was left by hand instead of snapping back. `/emergency_stop` is created by `sts_hardware_interface` itself, so it doesn't exist under `ros2_control_hardware_type:=mujoco` (a joystick e-stop toggle fails loudly with a "service not available" error there, not silently) — that mode is for ROS-graph/simulation testing only, never for anything near real hardware. `use_mock:=true` (with the default `ros2_control_hardware_type:=real`) still loads `sts_hardware_interface` and its `/emergency_stop`, just with servo I/O faked internally.
+**This is a real, motorized robot arm with no hardwired physical emergency stop.** `/emergency_stop` is a software service call (toggled via joystick button) that tells the hardware interface to stop issuing motor commands. It is not a hardware kill switch, and it will not help if the software stack itself has hung, crashed, or lost connection to the joystick. Self-collision checking in `joint_trajectory_bridge` rejects self-colliding targets before they're sent to the controller, but it is not a substitute for supervision. While e-stopped, `teleop_ik_node` tracks the arm's live pose as its target instead of driving toward the pre-e-stop target, so releasing e-stop holds the arm where it was left by hand instead of snapping back. On real hardware, `/emergency_stop` is created by `sts_hardware_interface` itself, which releases torque so the arm goes limp — matching what cutting power to the servos actually does. `ros2_control_hardware_type:=mujoco` also serves `/emergency_stop` (via [`mujoco_ros2_plugins`](https://github.com/adityakamath/mujoco_ros2_plugins), same as [lekiwi_ros2](https://github.com/adityakamath/lekiwi_ros2)/[pantilt_ros2](https://github.com/adityakamath/pantilt_ros2)), but the simulated version **holds the last commanded position** instead of releasing torque — it does not reproduce the real failure mode, so don't treat a mujoco-mode e-stop test as validating hardware behavior. `use_mock:=true` (with the default `ros2_control_hardware_type:=real`) still loads `sts_hardware_interface` and its `/emergency_stop`, just with servo I/O faked internally.
 
 This repository is a work in progress and includes experimental and AI-generated content. Expect breaking changes and incomplete safety coverage. No warranty, express or implied — see [LICENSE](LICENSE).
 
-## Overview
+## Contents
 
-ROS 2 + ros2_control stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). Features Pinocchio-based Cartesian IK joystick teleoperation, teach-and-repeat recording/replay, self-collision-checked trajectory execution, and gripper control — all driven through a single collision-checked bridge regardless of the source (teleop, GUI, or replay). Supports real hardware (Feetech STS servos) and MuJoCo simulation.
+| Package | Purpose |
+|---------|---------|
+| [`so_arm_bringup`](so_arm_bringup/README.md) | Top-level launch files, teach-and-repeat record/replay, wrist camera driver |
+| [`so_arm_control`](so_arm_control/README.md) | `ros2_control` setup, IK teleop, self-collision-checked trajectory bridge, control/teleop-only launch files |
+| [`so_arm_description`](so_arm_description/README.md) | URDF models and meshes for SO100 and SO101 |
+| [`so_arm_mujoco`](so_arm_mujoco/README.md) | MuJoCo models generated from the URDF, a standalone (no ROS) viewer, and Gymnasium environments |
 
-## Packages
+This is built alongside, not vendored in this tree:
 
-- **so_arm_control** — ros2_control hardware interfaces and controller configs, the IK+gripper teleop node, self-collision-checked trajectory bridge, and the control-only and teleop-only launch files (real hardware or MuJoCo). Self-contained and launchable on its own.
-- **so_arm_bringup** — top-level orchestration: `so_arm.launch.py` composes so_arm_control's control and teleop stacks for a single arm plus teach-and-repeat record/replay and an optional wrist camera (SO101 only); `leader_follower.launch.py` composes two of them into a dual-arm leader-follower rig.
-- **so_arm_description** — URDF and MJCF robot models and meshes for SO100 and SO101.
+| Repository | Purpose |
+|------------|---------|
+| [`sts_hardware_interface`](https://github.com/adityakamath/sts_hardware_interface) | `ros2_control` hardware interface for the Feetech STS servos |
 
-### Dependencies
+## Hardware
 
-- **[ROS 2](https://docs.ros.org/en/kilted/)**: CI-tested on Kilted and Jazzy
-- **[ros2_control](https://control.ros.org/)** framework with `joint_state_broadcaster` and `joint_trajectory_controller` (arm and gripper both commanded through the one controller)
-- **[sts_hardware_interface](https://github.com/adityakamath/sts_hardware_interface)** (built separately, anywhere in this workspace's `src/`): Hardware interface for Feetech STS servos
-- **[Pinocchio](https://github.com/stack-of-tasks/pinocchio)** (`sudo apt install ros-kilted-pinocchio`): Rigid-body kinematics library backing the IK teleop solver
-- **[python-fcl](https://github.com/BerkeleyAutomation/python-fcl)** + **[numpy-stl](https://github.com/WoLpH/numpy-stl)** (pip): Mesh-based self-collision checking
-- **[joy](https://github.com/ros-drivers/joystick_drivers)** / **[joy_teleop](https://index.ros.org/p/joy_teleop/)**: Joystick teleoperation
-- **[mujoco_ros2_control](https://github.com/ros-controls/mujoco_ros2_control)** (`sudo apt install ros-kilted-mujoco-ros2-control`): MuJoCo simulation backend, `ros2_control_hardware_type:=mujoco` only
-- **OpenCV** (`python3-opencv`) + **cv_bridge**: wrist camera driver (`so_arm_bringup`'s `opencv_camera_node`), SO101 + `wrist_camera:=true` only
-- **[rosbag2](https://github.com/ros2/rosbag2)** with the **mcap** storage plugin (`ros-kilted-rosbag2-storage-mcap`): teach-and-repeat record/replay
+| Component | Details |
+|-----------|---------|
+| Joints | Six Feetech STS3215 servo motors (IDs 1–6) on one serial bus at 1 Mbaud |
+| Controller | A Steam Deck used as a generic joystick (see [Joystick](#joystick)) |
+| Wrist camera | Optional, SO101 only — an Innomaker U20CAM-1080P (or similar UVC webcam) on the Hex-Nut Recess mount |
 
-## Installation and Usage
+### Stable device names (udev)
 
-```bash
-cd ~/ros2_ws/src
-git clone https://github.com/adityakamath/so_arm_ros2.git
-cd ~/ros2_ws
-./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
-colcon build --packages-up-to so_arm_bringup
-source install/setup.bash
-ros2 launch so_arm_bringup so_arm.launch.py
-```
-
-If `python-fcl` is missing, `joint_trajectory_bridge` now logs an explicit dependency error and
-automatically disables self-collision checking instead of crashing. Install dependencies with:
-
-```bash
-./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh
-```
-
-`sts_hardware_interface` is not vendored here - it's a plain package dependency, built once anywhere in this workspace's `src/` and shared by every repo that needs it. If you already have it elsewhere (e.g. cloned alongside `lekiwi_ros2`), colcon will find that copy. Otherwise, clone it directly into `src/`: `git clone --recursive https://github.com/adityakamath/sts_hardware_interface.git` (`--recursive` also fetches its own `external/SCServo_Linux` submodule).
-
-No real servos yet? `ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true` brings up the full stack with `sts_hardware_interface`'s own mock mode (servo I/O faked internally) instead - still needs it built, but no serial port or real hardware required.
-
-No wrist camera fitted? Leave `wrist_camera` at its `true` default - the driver detects the missing camera, logs a warning, and exits cleanly instead of crashing; set `wrist_camera:=false` to skip it entirely.
-
-`so_arm.launch.py` composes so_arm_control's `control.launch.py` and `teleop.launch.py` for you. To run just one - e.g. control only, or to restart teleop without restarting the control stack - launch them separately instead:
-
-```bash
-ros2 launch so_arm_control control.launch.py
-# in a separate terminal, once that's up:
-ros2 launch so_arm_control teleop.launch.py
-```
-
-For a dual-arm leader-follower rig, see `ros2 launch so_arm_bringup leader_follower.launch.py --show-arguments`.
-
-## Stable Device Names (udev)
-
-Real hardware (not `ros2_control_hardware_type:=mujoco`) expects the Feetech STS servo bus at a fixed `/dev/ttySERVO`, matching `serial_port`'s xacro default — not whatever `/dev/ttyUSB*`/`/dev/ttyACM*` name the kernel happens to assign on that boot. This repo doesn't bundle a udev rule; identify the adapter's vendor/product ID with `udevadm info -a -n /dev/ttyUSB0` (or `ttyACM0`) and add a rule like:
+Real hardware (not `ros2_control_hardware_type:=mujoco`) expects the servo bus at a fixed `/dev/ttySERVO`, matching `serial_port`'s xacro default — not whatever `/dev/ttyUSB*`/`/dev/ttyACM*` name the kernel assigns on that boot. This repo doesn't bundle a udev rule; identify the adapter's vendor/product ID with `udevadm info -a -n /dev/ttyUSB0` (or `ttyACM0`) and add a rule like:
 
 ```
 KERNEL=="ttyACM*", ATTRS{idVendor}=="xxxx", ATTRS{idProduct}=="xxxx", SYMLINK+="ttySERVO"
@@ -80,77 +46,119 @@ KERNEL=="ttyACM*", ATTRS{idVendor}=="xxxx", ATTRS{idProduct}=="xxxx", SYMLINK+="
 
 to `/etc/udev/rules.d/`, then `sudo udevadm control --reload-rules && sudo udevadm trigger` and reconnect the device.
 
-## Launch Arguments
+## Installation
 
-The most commonly used arguments for `so_arm_bringup so_arm.launch.py` (`model` through `use_sim_time` share names with `so_arm_control control.launch.py`, which it wraps - run with `--show-arguments` for the full list):
+Requires [ROS 2](https://docs.ros.org/en/kilted/) (CI-tested on Kilted and Jazzy) with:
 
-| Argument                    | Default | Description                                                            |
-|------------------------------|---------|--------------------------------------------------------------------------|
-| `model`                      | `so101` | Robot model to launch: `so100` or `so101`                                |
-| `serial_port`                | `""`    | Serial port override; empty uses the xacro default (`/dev/ttySERVO`)     |
-| `use_mock`                   | `""`    | `sts_hardware_interface`'s own mock mode (`true`/`false`); needs it built |
-| `ros2_control_hardware_type` | `real`  | `real` for the STS hardware plugin, `mujoco` for MuJoCo simulation                        |
-| `use_sim_time`                | `false` | Use `/clock` from a simulator instead of system time                     |
-| `wrist_camera`                | `true`  | Launch the wrist camera driver (real hardware only). No camera detected → logs a warning and exits cleanly instead of crashing; set `false` if this arm has none fitted |
-| `wrist_camera_urdf`           | `true`  | SO101 only: `false` omits the wrist camera mount/links/joints from `robot_description` entirely, independent of the `wrist_camera` arg above |
-| `replay_loops`                | `""`    | Override record/replay's `replay_loops` (`0` = loop forever, `N>0` = exactly `N` passes); empty uses the yaml default |
+- [`ros2_control`](https://control.ros.org/) and `ros2_controllers` (`joint_state_broadcaster`, `joint_trajectory_controller`)
+- [Pinocchio](https://github.com/stack-of-tasks/pinocchio) (`sudo apt install ros-kilted-pinocchio`)
+- [`joy`](https://github.com/ros-drivers/joystick_drivers) and [`joy_teleop`](https://index.ros.org/p/joy_teleop/)
+- [rosbag2](https://github.com/ros2/rosbag2) with the mcap storage plugin (`ros-kilted-rosbag2-storage-mcap`), for teach-and-repeat
 
-`teleop.launch.py` takes no launch arguments — it loads `so_arm_control/config/teleop.yaml` directly. `so_arm_bringup leader_follower.launch.py` has its own `leader_*`/`follower_*`-prefixed argument set for dual-arm setups; see `--show-arguments`.
+Clone and build:
 
-## Joystick Configuration
-
-Teleoperation is configured for a **Steam Deck** used as a generic joystick, not through Steam Input, so button/axis numbers below are specific to that interface.
-
-**Cartesian teleop** (requires the L1 deadman held):
-
-| Control      | Action                                    |
-|---------------|----------------------------------------------|
-| L1            | Deadman                                       |
-| Left stick    | Linear X/Y                                    |
-| Right stick   | Linear Z / wrist roll                         |
-| Axis 5        | Gripper open/close (also needs L1)            |
-
-**Other controls**:
-
-| Control   | Action                                              |
-|------------|--------------------------------------------------------|
-| B          | Toggle emergency stop                                   |
-| X          | Toggle between GUI and joystick IK control               |
-| Y          | Toggle recording (teach-and-repeat)                       |
-| A          | Toggle replay of the latest recording                     |
-
-Replay always takes priority over manual control while active — see `joint_state_switch_node`'s priority-ordered input switching.
-
-## Gripper Compliance (Experimental, Untested)
-
-`teleop_ik_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default
-`0.0`) shifts the commanded gripper position away from the raw joystick/GUI target in proportion
-to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it —
-a software approximation of impedance control that stays entirely in Mode 0 (Position): the
-onboard servo PID remains the fast inner loop, so a stalled host still just holds position rather
-than pushing indefinitely. Sign and magnitude are uncalibrated — start at `0.0` and raise
-gradually.
-
-## Structure
-
-```text
-so_arm_ros2/
-├── so_arm_control/          # ros2_control config, IK+gripper teleop node, launch files
-│   ├── config/               # control.yaml, teleop.yaml, joint_trajectory_bridge.yaml
-│   ├── launch/                # control.launch.py, teleop.launch.py - control-only and teleop-only
-│   └── so_arm_control/
-│       ├── scripts/            # generate_srdf utility
-│       └── so_arm_utils/       # Shared IK, collision-resolution, QoS helpers
-├── so_arm_bringup/          # Top-level orchestration, record/replay, wrist camera
-│   ├── config/               # leader_teleop.yaml, follower_teleop.yaml, record_replay.yaml, wrist_camera.yaml
-│   ├── launch/                # so_arm.launch.py (single arm), leader_follower.launch.py (dual arm), record_replay.launch.py, wrist_camera.launch.py
-│   └── so_arm_bringup/
-│       ├── record_replay_node.py, opencv_camera_node.py
-│       └── so_arm_utils/       # BagRecorder/BagPlayer (mcap round trip)
-└── so_arm_description/      # URDF/MJCF models and meshes (SO100, SO101)
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/adityakamath/so_arm_ros2.git
+git clone --recursive https://github.com/adityakamath/sts_hardware_interface.git   # not vendored here
+cd ~/ros2_ws
+./src/so_arm_ros2/so_arm_control/scripts/bootstrap_external_deps.sh   # python-fcl, numpy-stl
+colcon build --packages-up-to so_arm_bringup
+source install/setup.bash
 ```
 
-`sts_hardware_interface` isn't part of this tree - it's built as its own package elsewhere in the workspace's `src/` (see Dependencies above).
+`sts_hardware_interface` is a plain package dependency, not a submodule — if you already have it built elsewhere in this workspace's `src/` (e.g. alongside `lekiwi_ros2`), colcon will find that copy instead.
+
+### Simulation (optional)
+
+`ros2_control_hardware_type:=mujoco` needs the MuJoCo packages, plus [`mujoco_ros2_plugins`](https://github.com/adityakamath/mujoco_ros2_plugins) for the simulated `/emergency_stop` (not vendored here — same "build alongside" pattern as `sts_hardware_interface` above):
+
+```bash
+sudo apt install ros-kilted-mujoco-ros2-control ros-kilted-mujoco-ros2-control-plugins
+git clone https://github.com/adityakamath/mujoco_ros2_plugins.git src/mujoco_ros2_plugins
+./src/so_arm_ros2/so_arm_mujoco/scripts/bootstrap_external_deps.sh
+colcon build --packages-select mujoco_ros2_plugins
+```
+
+`mujoco_ros2_control_plugins` also drives the simulated wrist camera (SO101 only). See the [`so_arm_mujoco` README](so_arm_mujoco/README.md) for the full list, including the standalone (no ROS) viewer.
+
+## Running
+
+```bash
+ros2 launch so_arm_bringup so_arm.launch.py                                    # single arm, real hardware
+ros2 launch so_arm_bringup so_arm.launch.py model:=so100                       # so100 instead of so101
+ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true                     # no hardware, simulated motors
+ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco # MuJoCo simulation
+ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco mujoco_arena:=true  # + graspable cubes/tray
+ros2 launch so_arm_bringup leader_follower.launch.py                           # dual-arm leader-follower
+```
+
+`so_arm.launch.py` composes `so_arm_control`'s `control.launch.py` and `teleop.launch.py` for you. To restart teleop without restarting control, launch them separately instead:
+
+```bash
+ros2 launch so_arm_control control.launch.py
+# in a separate terminal, once that's up:
+ros2 launch so_arm_control teleop.launch.py
+```
+
+### Launch arguments
+
+The most common arguments for `so_arm_bringup so_arm.launch.py` (`--show-arguments` lists them all):
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `model` | `so101` | Robot model: `so100` or `so101` |
+| `serial_port` | `""` | Serial port override; empty uses the xacro default (`/dev/ttySERVO`) |
+| `use_mock` | `""` | `sts_hardware_interface`'s own mock mode (`true`/`false`); empty uses the xacro default |
+| `ros2_control_hardware_type` | `real` | `real` for the STS hardware plugin, `mujoco` for MuJoCo simulation |
+| `use_sim_time` | `false` | Use `/clock` from a simulator instead of system time |
+| `mujoco_headless` | `false` | `mujoco` only: suppress the viewer window |
+| `mujoco_arena` | `false` | `mujoco` only: `true` adds a small tabletop workspace within reach - three graspable cubes and a tray - on top of the default flat skybox+floor scene |
+| `wrist_camera` | `true` | Launch the wrist camera driver (real hardware only); `false` if this arm has none fitted |
+| `wrist_camera_urdf` | `true` | SO101 only: `false` omits the wrist camera mount/links/joints from `robot_description` |
+| `replay_loops` | `""` | Override teach-and-repeat's `replay_loops` (`0` = loop forever, `N>0` = exactly `N` passes); empty uses the yaml default |
+
+`so_arm_bringup leader_follower.launch.py` has its own `leader_*`/`follower_*`-prefixed argument set; see `--show-arguments`. The full set for each package is in its own README ([`so_arm_control`](so_arm_control/README.md#launch-arguments), [`so_arm_bringup`](so_arm_bringup/README.md#launch-arguments)).
+
+### Joystick
+
+Teleoperation is configured for a **Steam Deck** used as a generic joystick, not through Steam Input, so the button and axis numbers are specific to that interface.
+
+| Control | Action |
+|---------|--------|
+| L1 (hold) | Deadman: teleop commands are only sent while it is held |
+| Left stick | Linear X / Y |
+| Right stick | Linear Z / wrist roll |
+| Axis 5 | Gripper open/close (also needs L1) |
+| B | Toggle emergency stop |
+| X | Toggle between GUI and joystick IK control |
+| Y | Toggle recording (teach-and-repeat) |
+| A | Toggle replay of the latest recording |
+
+Replay always takes priority over manual control while active — see `joint_state_switch_node`'s priority-ordered input switching in [`so_arm_control`](so_arm_control/README.md#how-it-works).
+
+## Configuration
+
+| File | What it sets |
+|------|--------------|
+| [`so_arm_control/config/urdf_config.yaml`](so_arm_control/config/urdf_config.yaml) | Servo serial port, motor IDs, PID coefficients, mock mode |
+| [`so_arm_control/config/control.yaml`](so_arm_control/config/control.yaml) | Controller manager and `so_arm_controller` |
+| [`so_arm_control/config/teleop.yaml`](so_arm_control/config/teleop.yaml) | Joystick buttons/axes, `teleop_ik_node` parameters (including gripper compliance) |
+| [`so_arm_control/config/joint_trajectory_bridge.yaml`](so_arm_control/config/joint_trajectory_bridge.yaml) | Self-collision-check tolerances every control path routes through |
+| [`so_arm_bringup/config/record_replay.yaml`](so_arm_bringup/config/record_replay.yaml) | Teach-and-repeat recordings directory, topics, replay loop count |
+| [`so_arm_bringup/config/wrist_camera.yaml`](so_arm_bringup/config/wrist_camera.yaml) | Wrist camera device settings |
+
+## Simulation
+
+`ros2_control_hardware_type:=mujoco` runs the same launch files against a MuJoCo model instead of the hardware. The model is generated at launch from the URDF by [`so_arm_mujoco`](so_arm_mujoco/README.md), which is also usable entirely standalone with no ROS. `mujoco_ros2_plugins` and `mujoco_ros2_control_plugins` add a simulated `/emergency_stop` (holds position rather than releasing torque — see the Safety section above) and, for SO101, the wrist camera on `/image_raw`/`/camera_info`, matching the real driver's topics. This closes the ROS-graph gap with real hardware, but the underlying dynamics are still uncalibrated (see [`so_arm_mujoco`'s Limitations](so_arm_mujoco/README.md#limitations)) — this mode is for integration/graph testing, not for validating hardware behavior. To watch a headless run (`mujoco_headless:=true`) from another machine, run `foxglove_bridge` and connect [Foxglove](https://foxglove.dev/) to `ws://<host>:8765`.
+
+## Gripper compliance (experimental, untested)
+
+`teleop_ik_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default `0.0`) shifts the commanded gripper position away from the raw joystick/GUI target in proportion to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it — a software approximation of impedance control that stays entirely in Mode 0 (Position): the onboard servo PID remains the fast inner loop, so a stalled host still just holds position rather than pushing indefinitely. Sign and magnitude are uncalibrated — start at `0.0` and raise gradually.
+
+## Leader-follower (dual arm)
+
+`so_arm_bringup leader_follower.launch.py` runs two arms: the leader under `/leader` with full control and teleop, the follower under `/follower` tracking the leader's realized joint states live. Teach-and-repeat records from the leader; replaying it drives the follower (not the leader) instead, so a recorded demonstration can be played back on a second arm. See [`so_arm_bringup`'s README](so_arm_bringup/README.md#how-it-works) for how the namespacing and topic redirection work.
 
 ## License
 

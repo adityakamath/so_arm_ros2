@@ -26,17 +26,25 @@ def launch_setup(context):
     use_sim_time = LaunchConfiguration('use_sim_time').perform(context).lower() in ('true', '1')
     effective_hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
-    scene = LaunchConfiguration('scene').perform(context)
+    mujoco_arena = LaunchConfiguration('mujoco_arena').perform(context)
     frame_prefix = LaunchConfiguration('frame_prefix').perform(context)
     wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf').perform(context)
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
+    # Resolved unconditionally, not just under the mujoco branch below - mujoco_control_node's
+    # plugin config (further down) needs it regardless of effective_hw_type, since that Node is
+    # always constructed, just conditionally launched.
+    pkg_mujoco = FindPackageShare('so_arm_mujoco').perform(context)
     xacro = FindExecutable(name='xacro').perform(context)
 
     # MJCF must land on disk (mesh paths are filesystem-based), unlike robot_description below.
     if effective_hw_type == 'mujoco':
-        pkg_mujoco = FindPackageShare('so_arm_mujoco').perform(context)
+        # mujoco_arena is a plain on/off switch at the launch-argument level; the richer
+        # flat/arena/none scene selector (mjcf/scenes/) lives one layer down, in
+        # so_arm.mjcf.xacro's own "scene" arg - 'none' isn't exposed here since composing this
+        # arm into an external scene isn't a launch-time concern.
+        scene = 'arena' if mujoco_arena.lower() == 'true' else 'flat'
         mjcf_xml = subprocess.run(
             [xacro, f'{pkg_mujoco}/mjcf/so_arm.mjcf.xacro', f'so_arm_config:={model}',
              f'scene:={scene}'],
@@ -97,11 +105,21 @@ def launch_setup(context):
         arguments=['--ros-args', '--log-level', 'rclcpp:=ERROR'],
     )
 
+    # emergency_stop_plugin (mujoco_ros2_plugins) always applies; mujoco_camera_plugin
+    # (mujoco_ros2_control_plugins) only when the model actually has the wrist_cam camera in
+    # its MJCF - so100 has none, and SO101 drops it entirely when wrist_camera_urdf:=false.
+    mujoco_plugin_params = [f'{pkg_mujoco}/config/mujoco_ros2_control_plugins.yaml']
+    if model == 'so101' and wrist_camera_urdf.lower() == 'true':
+        mujoco_plugin_params.append(
+            f'{pkg_mujoco}/config/mujoco_ros2_control_plugins_so101_camera.yaml')
+
     # Hosts the MuJoCo sim itself; always needs use_sim_time regardless of the launch arg.
     mujoco_control_node = Node(
         package='mujoco_ros2_control',
         executable='ros2_control_node',
-        parameters=[robot_description, control_yaml, {'use_sim_time': True}],
+        parameters=[
+            robot_description, control_yaml, *mujoco_plugin_params, {'use_sim_time': True},
+        ],
         output='both',
     )
 
@@ -181,11 +199,11 @@ def generate_launch_description():
             description='mujoco only: suppress viewer window.',
         ),
         DeclareLaunchArgument(
-            'scene',
-            default_value='true',
+            'mujoco_arena',
+            default_value='false',
             description=(
-                'mujoco only: false omits the built-in free-standing scene '
-                '(skybox/floor/lighting), e.g. to compose the arm into an external scene.'
+                'mujoco only: true adds a small tabletop workspace within reach - three '
+                'graspable cubes and a tray - on top of the default flat skybox+floor scene.'
             ),
         ),
         DeclareLaunchArgument(
