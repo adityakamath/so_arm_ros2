@@ -6,14 +6,12 @@
 # bool_toggle_node already targets for real hardware (so_arm_control/config/teleop.yaml) - no
 # separate wiring needed for the joystick/GUI toggle to reach it in mujoco mode too.
 #
-# Unlike sts_hardware_interface's real /emergency_stop (and this package's own standalone
-# so_arm_mujoco tools, so_arm_mujoco/keyboard.py's EStop), this plugin HOLDS the last commanded
-# position while tripped rather than releasing torque - matching mujoco_ros2_plugins' behavior
-# for lekiwi_ros2/pantilt_ros2's position-controlled joints, not the arm's actual gravity-drop
-# behavior on power cut. Simulation fidelity for this specific failure mode is lower than the
-# standalone tools; treat mujoco-mode e-stop as a ROS-graph exercise, not a physics validation.
+# release_on_stop:=true matches sts_hardware_interface's real /emergency_stop and this package's
+# own standalone tools (so_arm_mujoco/keyboard.py's EStop): torque and joint damping are released
+# while tripped, so the arm falls under gravity (and its own frictionloss) rather than holding.
 /**:
   ros__parameters:
     mujoco_plugins:
       emergency_stop_plugin:
         type: "mujoco_ros2_plugins/EmergencyStopPlugin"
+        release_on_stop: true
