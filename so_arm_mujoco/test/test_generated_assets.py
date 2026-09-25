@@ -7,6 +7,7 @@ silently wins, and edits to the xacro appear to do nothing. That has actually ha
 with the exact command to run instead of the drift reaching a viewer or a trained policy.
 """
 import re
+from pathlib import Path
 
 import mujoco
 import pytest
@@ -57,8 +58,9 @@ def test_committed_mjcf_is_self_contained(model_name):
 
 
 def test_committed_mjcf_loads_in_mujoco(model_name):
-    """Compiles as written, from its own directory, with the relative mesh paths as committed."""
-    model = mujoco.MjModel.from_xml_path(str(committed_mjcf_path(model_name)))
+    """Loads the source-checkout asset, where its relative mesh paths are valid."""
+    source_path = Path(__file__).resolve().parents[1] / 'mjcf' / f'{model_name}.xml'
+    model = mujoco.MjModel.from_xml_path(str(source_path))
 
     assert model.nu == 6
     assert model.ngeom > 0
