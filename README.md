@@ -2,7 +2,6 @@
 
 [![ROS 2](https://img.shields.io/badge/ROS_2-Kilted_%7C_Jazzy-blue?logo=ros)](https://docs.ros.org)
 [![CI](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml)
-[![Ask DeepWiki (Experimental)](https://deepwiki.com/badge.svg)](https://deepwiki.com/adityakamath/so_arm_ros2)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ROS 2 software stack for the SO-ARM100 family of 5-DOF + gripper robot arms (SO100 and SO101). It provides Pinocchio-based Cartesian IK joystick/GUI teleoperation with self-collision checking, gripper control, teach-and-repeat record/replay, an optional wrist camera (SO101), a dual-arm leader-follower mode, and a MuJoCo simulation.
