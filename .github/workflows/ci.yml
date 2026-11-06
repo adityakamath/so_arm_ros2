@@ -54,7 +54,6 @@ jobs:
             ros-${{ matrix.ros_distro }}-controller-manager-msgs \
             ros-${{ matrix.ros_distro }}-cv-bridge \
             ros-${{ matrix.ros_distro }}-diagnostic-msgs \
-            ros-${{ matrix.ros_distro }}-effort-controllers \
             ros-${{ matrix.ros_distro }}-hardware-interface \
             ros-${{ matrix.ros_distro }}-joint-state-broadcaster \
             ros-${{ matrix.ros_distro }}-joint-trajectory-controller \
