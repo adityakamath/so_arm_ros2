@@ -4,6 +4,7 @@
 file that composes this with teleop.launch.py.
 """
 
+import os
 import subprocess
 import tempfile
 
@@ -135,10 +136,14 @@ def launch_setup(context):
         parameters=[bridge_config],
     )
 
+    # Lyrical+ no longer forwards the controller_manager's parameters to controllers, so the
+    # spawners load control.yaml themselves.
+    spawner_params = (['--param-file', control_yaml]
+                      if os.environ.get('ROS_DISTRO') in ('lyrical', 'rolling') else [])
     joint_state_broadcaster_spawner = Node(
         package='controller_manager', executable='spawner',
         arguments=['joint_state_broadcaster', '-c', 'controller_manager',
-                   '--controller-manager-timeout', '30'], output='both',
+                   '--controller-manager-timeout', '30', *spawner_params], output='both',
     )
     # /dynamic_joint_states is gone on Lyrical, so extra state goes through state_interfaces_broadcaster.
     # Voltage/temperature/current/is_moving exist on real hardware only (see the URDF's ros2_control block).
@@ -158,7 +163,7 @@ def launch_setup(context):
     so_arm_controller_spawner = Node(
         package='controller_manager', executable='spawner',
         arguments=['so_arm_controller', '-c', 'controller_manager',
-                   '--controller-manager-timeout', '30'], output='both',
+                   '--controller-manager-timeout', '30', *spawner_params], output='both',
     )
 
     # NOTE: lekiwi_control's stagger pattern (RegisterEventHandler+OnProcessStart) is NOT used
