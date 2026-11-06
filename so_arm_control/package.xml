@@ -30,6 +30,7 @@
   <exec_depend>ros2_control</exec_depend>
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>state_interfaces_broadcaster</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>parallel_gripper_controller</exec_depend>
   <exec_depend>effort_controllers</exec_depend>

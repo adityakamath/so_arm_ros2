@@ -2,7 +2,7 @@
   ros__parameters:
     recordings_dir: src://so_arm_ros2/so_arm_bringup/recordings  # resolved via ament_index
     joint_states_topic: joint_states
-    dynamic_joint_states_topic: dynamic_joint_states
+    state_interfaces_topic: state_interfaces_broadcaster  # controller name; records its names + values
     tf_topic: tf
     estop_status_topic: emergency_stop_active
     output_topic: joint_commands_replay  # joint_state_switch_node's 'replay' input (so_arm_control)

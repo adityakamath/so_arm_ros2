@@ -7,7 +7,7 @@ ros2_control_hardware_type:=real, so this exercises the actual hardware plugin w
 real serial port or real servos. Requires sts_hardware_interface to be built.
 
 Exercises the real end-to-end path a user actually runs: robot_state_publisher ->
-controller_manager -> joint_state_broadcaster/so_arm_controller (arm + gripper) ->
+controller_manager -> joint_state_broadcaster/state_interfaces_broadcaster/so_arm_controller (arm + gripper) ->
 joint_trajectory_bridge, including the self-collision checker built from the real URDF/meshes.
 """
 
@@ -125,7 +125,7 @@ class TestControlStackComesUp(unittest.TestCase):
         service = '/controller_manager/list_controllers'
         client = self._node.create_client(ListControllers, service)
         self.assertTrue(client.wait_for_service(timeout_sec=30.0))
-        expected = {'joint_state_broadcaster', 'so_arm_controller'}
+        expected = {'joint_state_broadcaster', 'state_interfaces_broadcaster', 'so_arm_controller'}
         deadline = time.monotonic() + 30.0
         active = set()
         while time.monotonic() < deadline:

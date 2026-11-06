@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""record_replay_node: records /joint_states + /dynamic_joint_states + /tf to mcap, replays
+"""record_replay_node: records /joint_states + /state_interfaces_broadcaster/{names,values} + /tf to mcap, replays
 the latest as commands. Split out of so_arm_control's teleop.launch.py - record/replay neither
 controls nor calibrates the robot, so it lives in so_arm_bringup instead.
 """

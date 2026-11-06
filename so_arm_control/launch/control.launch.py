@@ -140,6 +140,21 @@ def launch_setup(context):
         arguments=['joint_state_broadcaster', '-c', 'controller_manager',
                    '--controller-manager-timeout', '30'], output='both',
     )
+    # /dynamic_joint_states is gone on Lyrical, so extra state goes through state_interfaces_broadcaster.
+    # Voltage/temperature/current/is_moving exist on real hardware only (see the URDF's ros2_control block).
+    joints = yaml.safe_load(open(control_yaml))['/**/joint_state_broadcaster']['ros__parameters']['joints']
+    state_ifaces = ['effort']
+    if effective_hw_type == 'real':
+        state_ifaces += ['voltage', 'temperature', 'current', 'is_moving']
+    with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.yaml', prefix='so_arm_state_ifaces_', delete=False) as f:
+        yaml.safe_dump({'/**/state_interfaces_broadcaster': {'ros__parameters': {
+            'interfaces': [f'{j}/{i}' for j in joints for i in state_ifaces]}}}, f)
+    state_interfaces_broadcaster_spawner = Node(
+        package='controller_manager', executable='spawner',
+        arguments=['state_interfaces_broadcaster', '-c', 'controller_manager',
+                   '--controller-manager-timeout', '30', '--param-file', f.name], output='both',
+    )
     so_arm_controller_spawner = Node(
         package='controller_manager', executable='spawner',
         arguments=['so_arm_controller', '-c', 'controller_manager',
@@ -153,6 +168,7 @@ def launch_setup(context):
     # controller_manager. Plain TimerActions stay inside that tree and are namespace-safe.
     controller_spawner_actions = [
         TimerAction(period=2.0, actions=[joint_state_broadcaster_spawner]),
+        TimerAction(period=2.25, actions=[state_interfaces_broadcaster_spawner]),
         TimerAction(period=2.5, actions=[so_arm_controller_spawner]),
     ]
 

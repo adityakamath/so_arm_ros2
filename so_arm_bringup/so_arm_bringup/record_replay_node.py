@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Record /joint_states + /dynamic_joint_states + /tf to mcap, replay the latest as commands."""
+"""Record /joint_states + /state_interfaces_broadcaster/{names,values} + /tf to mcap, replay the latest as commands."""
 
 import os
 import time
 
 from ament_index_python.packages import get_package_prefix, get_package_share_directory
-from control_msgs.msg import DynamicJointState
+from control_msgs.msg import Float64Values, Keys
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -13,7 +13,7 @@ from sensor_msgs.msg import JointState
 from so_arm_bringup.so_arm_utils.bag_player import BagPlayer
 from so_arm_bringup.so_arm_utils.bag_recorder import BagRecorder
 from so_arm_control.so_arm_utils.params import require_parameter
-from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS
+from so_arm_control.so_arm_utils.qos import LATCHED_BOOL_QOS, REALTIME_QOS
 from so_arm_control.so_arm_utils.spin import spin_and_shutdown
 from std_msgs.msg import Bool
 from std_srvs.srv import SetBool
@@ -42,7 +42,8 @@ class RecordReplayNode(Node):
         # CWD or username, unlike a bare relative/absolute path.
         self.declare_parameter('recordings_dir', 'src://so_arm_ros2/so_arm_bringup/recordings')
         self.declare_parameter('joint_states_topic', 'joint_states')
-        self.declare_parameter('dynamic_joint_states_topic', 'dynamic_joint_states')
+        # Name of the state_interfaces_broadcaster controller; its <name>/names and <name>/values are recorded.
+        self.declare_parameter('state_interfaces_topic', 'state_interfaces_broadcaster')
         self.declare_parameter('tf_topic', 'tf')
         self.declare_parameter('estop_status_topic', 'emergency_stop_active')
         self.declare_parameter('output_topic', 'joint_commands_replay')
@@ -56,9 +57,10 @@ class RecordReplayNode(Node):
 
         self._recordings_dir = _resolve_package_uri(self.get_parameter('recordings_dir').value)
         self._joint_states_topic = self.get_parameter('joint_states_topic').value
-        self._dynamic_joint_states_topic = (
-            self.get_parameter('dynamic_joint_states_topic').value
-        )
+        state_interfaces_topic = self.get_parameter('state_interfaces_topic').value
+        self._state_names_topic = f'{state_interfaces_topic}/names'
+        self._state_values_topic = f'{state_interfaces_topic}/values'
+        self._state_names_raw: bytes | None = None  # latched keys, re-written at the start of each bag
         self._tf_topic = self.get_parameter('tf_topic').value
         estop_status_topic = self.get_parameter('estop_status_topic').value
         output_topic = self.get_parameter('output_topic').value
@@ -72,8 +74,9 @@ class RecordReplayNode(Node):
 
         self._recorder = BagRecorder(self._recordings_dir, [
             (0, self._joint_states_topic, 'sensor_msgs/msg/JointState'),
-            (1, self._dynamic_joint_states_topic, 'control_msgs/msg/DynamicJointState'),
-            (2, self._tf_topic, 'tf2_msgs/msg/TFMessage'),
+            (1, self._state_names_topic, 'control_msgs/msg/Keys'),
+            (2, self._state_values_topic, 'control_msgs/msg/Float64Values'),
+            (3, self._tf_topic, 'tf2_msgs/msg/TFMessage'),
         ])
 
         self._estop_active = False
@@ -83,9 +86,13 @@ class RecordReplayNode(Node):
         self.create_subscription(
             JointState, self._joint_states_topic, self._on_joint_states_raw, 10, raw=True,
         )
+        # names is latched and published once, so it is cached and written when a recording starts
         self.create_subscription(
-            DynamicJointState, self._dynamic_joint_states_topic,
-            self._on_dynamic_joint_states_raw, 10, raw=True,
+            Keys, self._state_names_topic, self._on_state_names_raw, LATCHED_BOOL_QOS, raw=True,
+        )
+        self.create_subscription(
+            Float64Values, self._state_values_topic, self._on_state_values_raw, REALTIME_QOS,
+            raw=True,
         )
         self.create_subscription(
             TFMessage, self._tf_topic, self._on_tf_raw, 10, raw=True,
@@ -133,10 +140,12 @@ class RecordReplayNode(Node):
     def _on_joint_states_raw(self, raw: bytes) -> None:
         self._recorder.write(self._joint_states_topic, raw, self.get_clock().now().nanoseconds)
 
-    def _on_dynamic_joint_states_raw(self, raw: bytes) -> None:
-        self._recorder.write(
-            self._dynamic_joint_states_topic, raw, self.get_clock().now().nanoseconds,
-        )
+    def _on_state_names_raw(self, raw: bytes) -> None:
+        self._state_names_raw = raw
+        self._recorder.write(self._state_names_topic, raw, self.get_clock().now().nanoseconds)
+
+    def _on_state_values_raw(self, raw: bytes) -> None:
+        self._recorder.write(self._state_values_topic, raw, self.get_clock().now().nanoseconds)
 
     def _on_tf_raw(self, raw: bytes) -> None:
         self._recorder.write(self._tf_topic, raw, self.get_clock().now().nanoseconds)
@@ -167,6 +176,11 @@ class RecordReplayNode(Node):
             else:
                 self.get_logger().error(message)
             if ok:
+                if self._state_names_raw is not None:
+                    self._recorder.write(
+                        self._state_names_topic, self._state_names_raw,
+                        self.get_clock().now().nanoseconds,
+                    )
                 self._record_active_pub.publish(Bool(data=True))
             return response
 

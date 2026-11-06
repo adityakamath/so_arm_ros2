@@ -40,19 +40,19 @@ class TestRecordReplayYaml:
         self.params = self.cfg['record_replay_node']['ros__parameters']
 
     def test_required_keys_present(self):
-        for key in ('recordings_dir', 'joint_states_topic', 'dynamic_joint_states_topic',
+        for key in ('recordings_dir', 'joint_states_topic', 'state_interfaces_topic',
                     'tf_topic', 'estop_status_topic', 'output_topic', 'joint_names',
                     'publish_rate', 'replay_loops'):
             assert key in self.params, f"Missing key '{key}' in record_replay.yaml"
 
     def test_topics_are_relative_for_namespace_support(self):
-        for key in ('joint_states_topic', 'dynamic_joint_states_topic', 'tf_topic',
+        for key in ('joint_states_topic', 'state_interfaces_topic', 'tf_topic',
                     'estop_status_topic', 'output_topic'):
             assert not self.params[key].startswith('/'), f"'{key}' must not be absolute"
 
-    def test_topics_match_joint_state_broadcaster_output(self):
+    def test_topics_match_broadcaster_output(self):
         assert self.params['joint_states_topic'] == 'joint_states'
-        assert self.params['dynamic_joint_states_topic'] == 'dynamic_joint_states'
+        assert self.params['state_interfaces_topic'] == 'state_interfaces_broadcaster'
 
     def test_estop_status_topic_matches_bool_toggle_publish(self):
         """Must match bool_toggle_node's emergency_stop.publish_status_topic (so_arm_control's

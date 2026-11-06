@@ -11,6 +11,10 @@
     so_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    # Motor health + effort for record_replay_node; the interface list comes from control.launch.py (--param-file)
+    state_interfaces_broadcaster:
+      type: state_interfaces_broadcaster/StateInterfacesBroadcaster
+
 /**/joint_state_broadcaster:
   ros__parameters:
     joints:

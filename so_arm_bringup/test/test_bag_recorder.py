@@ -8,8 +8,9 @@ from so_arm_bringup.so_arm_utils.bag_recorder import BagRecorder
 
 _TOPICS = [
     (0, '/joint_states', 'sensor_msgs/msg/JointState'),
-    (1, '/dynamic_joint_states', 'control_msgs/msg/DynamicJointState'),
-    (2, '/tf', 'tf2_msgs/msg/TFMessage'),
+    (1, '/state_interfaces_broadcaster/names', 'control_msgs/msg/Keys'),
+    (2, '/state_interfaces_broadcaster/values', 'control_msgs/msg/Float64Values'),
+    (3, '/tf', 'tf2_msgs/msg/TFMessage'),
 ]
 
 

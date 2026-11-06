@@ -103,14 +103,17 @@ def _make_node():
     RclpyNode.__init__(node, f'test_record_replay_{next(_name_counter)}')
     node._recordings_dir = '/tmp/unused-in-these-tests'
     node._joint_states_topic = '/joint_states'
-    node._dynamic_joint_states_topic = '/dynamic_joint_states'
+    node._state_names_topic = '/state_interfaces_broadcaster/names'
+    node._state_values_topic = '/state_interfaces_broadcaster/values'
+    node._state_names_raw = None
     node._tf_topic = '/tf'
     node._joint_names = list(_JOINT_NAMES)
 
     node._recorder = BagRecorder(node._recordings_dir, [
         (0, node._joint_states_topic, 'sensor_msgs/msg/JointState'),
-        (1, node._dynamic_joint_states_topic, 'control_msgs/msg/DynamicJointState'),
-        (2, node._tf_topic, 'tf2_msgs/msg/TFMessage'),
+        (1, node._state_names_topic, 'control_msgs/msg/Keys'),
+        (2, node._state_values_topic, 'control_msgs/msg/Float64Values'),
+        (3, node._tf_topic, 'tf2_msgs/msg/TFMessage'),
     ])
     node._playback = BagPlayer(replay_loops=1)
 
@@ -208,14 +211,20 @@ class TestRawWriteCallbacks:
         fake = _FakeRecorder(is_recording=True)
         node._recorder = fake
         node._on_joint_states_raw(b'joint-bytes')
-        node._on_dynamic_joint_states_raw(b'dynamic-bytes')
+        node._on_state_names_raw(b'names-bytes')
+        node._on_state_values_raw(b'values-bytes')
         node._on_tf_raw(b'tf-bytes')
-        assert [w[0] for w in fake.written] == ['/joint_states', '/dynamic_joint_states', '/tf']
-        assert [w[1] for w in fake.written] == [b'joint-bytes', b'dynamic-bytes', b'tf-bytes']
+        assert [w[0] for w in fake.written] == [
+            '/joint_states', '/state_interfaces_broadcaster/names',
+            '/state_interfaces_broadcaster/values', '/tf']
+        assert [w[1] for w in fake.written] == [
+            b'joint-bytes', b'names-bytes', b'values-bytes', b'tf-bytes']
+        assert node._state_names_raw == b'names-bytes'
 
     def test_does_not_write_when_not_recording(self, node):
         node._on_joint_states_raw(b'joint-bytes')  # real, never-started BagRecorder - no crash
-        node._on_dynamic_joint_states_raw(b'dynamic-bytes')
+        node._on_state_names_raw(b'names-bytes')
+        node._on_state_values_raw(b'values-bytes')
         node._on_tf_raw(b'tf-bytes')
 
 

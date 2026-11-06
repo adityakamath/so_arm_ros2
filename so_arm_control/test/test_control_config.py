@@ -53,6 +53,9 @@ class TestControlYaml:
         assert types['joint_state_broadcaster']['type'] == (
             'joint_state_broadcaster/JointStateBroadcaster'
         )
+        assert types['state_interfaces_broadcaster']['type'] == (
+            'state_interfaces_broadcaster/StateInterfacesBroadcaster'
+        )
 
     def test_so_arm_controller_commands_arm_and_gripper(self):
         joints = self.cfg['so_arm_controller']['ros__parameters']['joints']

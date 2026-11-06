@@ -13,7 +13,7 @@ Top-level orchestration for the SO-ARM100 family. One launch file starts control
 | `config/record_replay.yaml` | Recordings directory, topics, replay loop count |
 | `config/leader_record_replay.yaml`, `leader_teleop.yaml`, `follower_teleop.yaml` | Leader-follower launch-argument overrides |
 | `config/wrist_camera.yaml`, `wrist_camera_calibration.yaml` | Camera device settings and a placeholder (FOV-derived, not measured) calibration |
-| `so_arm_bringup/record_replay_node.py` | Records `/joint_states` + `/dynamic_joint_states` + `/tf` to mcap; replays the latest as joint commands |
+| `so_arm_bringup/record_replay_node.py` | Records `/joint_states` + `/state_interfaces_broadcaster/{names,values}` + `/tf` to mcap; replays the latest as joint commands |
 | `so_arm_bringup/opencv_camera_node.py` | Generic OpenCV camera driver; this repo's one deployment is the wrist camera |
 | `recordings/` | Where `record_replay_node` writes and reads mcap bags |
 
