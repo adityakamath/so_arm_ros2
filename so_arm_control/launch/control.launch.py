@@ -173,8 +173,9 @@ def launch_setup(context):
     # controller_manager. Plain TimerActions stay inside that tree and are namespace-safe.
     controller_spawner_actions = [
         TimerAction(period=2.0, actions=[joint_state_broadcaster_spawner]),
-        TimerAction(period=2.25, actions=[state_interfaces_broadcaster_spawner]),
         TimerAction(period=2.5, actions=[so_arm_controller_spawner]),
+        # After so_arm_controller: overlapping spawners hung the Jazzy test run at shutdown.
+        TimerAction(period=3.0, actions=[state_interfaces_broadcaster_spawner]),
     ]
 
     return [
