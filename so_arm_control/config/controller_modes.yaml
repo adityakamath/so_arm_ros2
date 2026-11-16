@@ -1,0 +1,27 @@
+# Which motion controllers are active in each mode. Two controllers can't command the same joint
+# at once, so every motion controller is loaded but only the selected mode's are activated.
+#
+#   teleop - the default: the six-joint so_arm_controller that teleop, record/replay and the
+#            bridge send to
+#   moveit - MoveIt plans and executes: arm trajectories + the gripper action
+#   servo  - MoveIt Servo streams arm positions + the gripper action
+#
+# control.launch.py starts in `controller_mode:=<mode>`; so_arm_moveit's move_group.launch.py
+# switches a running stack into its mode and back to default_mode on exit. (Same shape as a
+# ros-controls/foreman scenario's profiles, should that replace this later.)
+default_mode: teleop
+
+# Active in every mode; not motion controllers.
+always:
+  - joint_state_broadcaster
+  - state_interfaces_broadcaster
+
+modes:
+  teleop:
+    - so_arm_controller
+  moveit:
+    - arm_trajectory_controller
+    - gripper_controller
+  servo:
+    - forward_position_controller
+    - gripper_controller

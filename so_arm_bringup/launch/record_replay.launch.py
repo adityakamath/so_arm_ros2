@@ -10,6 +10,8 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
+from so_arm_control.so_arm_utils.namespacing import in_namespace, namespace_arg
+
 
 def launch_setup(context):
     recordings_dir = LaunchConfiguration('recordings_dir').perform(context).strip()
@@ -17,6 +19,7 @@ def launch_setup(context):
     estop_status_topic = LaunchConfiguration(
         'record_replay_estop_status_topic').perform(context).strip()
     replay_loops = LaunchConfiguration('replay_loops').perform(context).strip()
+    namespace = LaunchConfiguration('namespace').perform(context)
 
     pkg_bringup = FindPackageShare('so_arm_bringup').perform(context)
     config = f'{pkg_bringup}/config/record_replay.yaml'
@@ -31,7 +34,7 @@ def launch_setup(context):
     if replay_loops:
         overrides['replay_loops'] = int(replay_loops)
 
-    return [
+    return in_namespace(namespace, [
         Node(
             package='so_arm_bringup',
             executable='record_replay_node',
@@ -39,7 +42,7 @@ def launch_setup(context):
             output='screen',
             parameters=[config, overrides],
         ),
-    ]
+    ])
 
 
 def generate_launch_description():
@@ -66,6 +69,7 @@ def generate_launch_description():
                 'N total passes); empty uses yaml value.'
             ),
         ),
+        namespace_arg(),
     ]
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

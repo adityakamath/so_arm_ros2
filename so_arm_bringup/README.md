@@ -38,7 +38,7 @@ No wrist camera fitted? Leave `wrist_camera` at its `true` default — the drive
 
 ### Launch arguments
 
-`so_arm.launch.py` shares `model`, `serial_port`, `use_mock`, `use_sim_time`, `ros2_control_hardware_type`, `mujoco_headless`, `mujoco_arena` and `frame_prefix` with `so_arm_control control.launch.py` — see its [Launch arguments](../so_arm_control/README.md#launch-arguments). This adds:
+`so_arm.launch.py` shares `model`, `serial_port`, `use_mock`, `use_sim_time`, `ros2_control_hardware_type`, `mujoco_headless`, `mujoco_arena`, `namespace` and `frame_prefix` with `so_arm_control control.launch.py` — see its [Launch arguments](../so_arm_control/README.md#launch-arguments). This adds:
 
 | Argument | Default | Meaning |
 |----------|---------|---------|
@@ -47,6 +47,14 @@ No wrist camera fitted? Leave `wrist_camera` at its `true` default — the drive
 | `wrist_camera_urdf` | `true` | SO101 only: `false` omits the wrist camera mount/links/joints from `robot_description`, which also disables the camera node — no mount means no camera to talk to |
 
 `leader_follower.launch.py` takes `model`, `use_sim_time`, `replay_loops`, and `leader_`/`follower_`-prefixed versions of `serial_port`, `use_mock`, `ros2_control_hardware_type`, `mujoco_headless` and `mujoco_arena` for each arm independently. `wrist_camera.launch.py` takes `index_or_path` and `camera_info_url` (both empty by default, falling back to yaml).
+
+### Namespacing
+
+`namespace:=arm1` on `so_arm.launch.py` puts control, teleop, record/replay and the wrist camera all under `/arm1`, with TF frames prefixed `arm1/` (set `frame_prefix` to override that). `record_replay.launch.py` and `wrist_camera.launch.py` take `namespace` too, for launching them on their own. `leader_follower.launch.py` is the same idea with two fixed namespaces, `/leader` and `/follower`, and doesn't take `namespace`.
+
+```bash
+ros2 launch so_arm_bringup so_arm.launch.py namespace:=arm1 use_mock:=true
+```
 
 ## Configuration
 

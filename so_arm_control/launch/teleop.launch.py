@@ -11,9 +11,15 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
+from so_arm_control.so_arm_utils.namespacing import (
+    in_namespace, namespace_arg, resolve_frame_prefix,
+)
+
 
 def launch_setup(context):
-    frame_prefix = LaunchConfiguration('frame_prefix').perform(context).strip()
+    namespace = LaunchConfiguration('namespace').perform(context)
+    frame_prefix = resolve_frame_prefix(
+        namespace, LaunchConfiguration('frame_prefix').perform(context))
 
     pkg_ctrl = FindPackageShare('so_arm_control').perform(context)
     config = f'{pkg_ctrl}/config/teleop.yaml'
@@ -37,7 +43,7 @@ def launch_setup(context):
             'target_frame': f'{frame_prefix}ik_target',
         }
 
-    return [
+    return in_namespace(namespace, [
         Node(
             package='joy_teleop',
             executable='joy_teleop',
@@ -65,7 +71,7 @@ def launch_setup(context):
             output='screen',
             parameters=[config, visualizer_frame_overrides],
         ),
-    ]
+    ])
 
 
 def generate_launch_description():
@@ -77,6 +83,7 @@ def generate_launch_description():
                 '(e.g. "leader/"); empty = no prefix, the single-arm default.'
             ),
         ),
+        namespace_arg(),
     ]
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

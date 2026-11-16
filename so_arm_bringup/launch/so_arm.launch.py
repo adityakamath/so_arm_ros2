@@ -11,6 +11,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 
+from so_arm_control.so_arm_utils.namespacing import namespace_arg
 from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS
 
 
@@ -22,6 +23,10 @@ def generate_launch_description():
     ros2_control_hardware_type = LaunchConfiguration('ros2_control_hardware_type')
     mujoco_headless = LaunchConfiguration('mujoco_headless')
     mujoco_arena = LaunchConfiguration('mujoco_arena')
+    # Each included launch pushes the namespace itself and derives frame_prefix from it
+    # (namespacing.py); passing it explicitly below, rather than pushing it here too, avoids
+    # the doubled /ns/ns that parent-config inheritance would otherwise cause.
+    namespace = LaunchConfiguration('namespace')
     frame_prefix = LaunchConfiguration('frame_prefix')
     replay_loops = LaunchConfiguration('replay_loops')
     wrist_camera = LaunchConfiguration('wrist_camera')
@@ -113,20 +118,23 @@ def generate_launch_description():
             'mujoco_headless': mujoco_headless,
             'mujoco_arena': mujoco_arena,
             'frame_prefix': frame_prefix,
+            'namespace': namespace,
             'wrist_camera_urdf': wrist_camera_urdf,
         }.items(),
     )
     teleop = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(teleop_launch),
+        launch_arguments={'frame_prefix': frame_prefix, 'namespace': namespace}.items(),
     )
     record_replay = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(record_replay_launch),
-        launch_arguments={'replay_loops': replay_loops}.items(),
+        launch_arguments={'replay_loops': replay_loops, 'namespace': namespace}.items(),
     )
     # Gated here, not in control.launch.py (a camera isn't control) - mock/mujoco has no camera.
     # Also requires wrist_camera_urdf:=true - no mount in the URDF means no camera to talk to.
     wrist_camera_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(wrist_camera_launch),
+        launch_arguments={'namespace': namespace}.items(),
         condition=IfCondition(PythonExpression([
             "'", wrist_camera, "' == 'true' and '",
             ros2_control_hardware_type, "' == 'real' and '",
@@ -135,5 +143,5 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        *declared_arguments, control, teleop, record_replay, wrist_camera_node,
+        *declared_arguments, namespace_arg(), control, teleop, record_replay, wrist_camera_node,
     ])

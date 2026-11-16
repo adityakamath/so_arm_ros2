@@ -33,6 +33,8 @@
   <exec_depend>state_interfaces_broadcaster</exec_depend>
   <exec_depend>joint_trajectory_controller</exec_depend>
   <exec_depend>parallel_gripper_controller</exec_depend>
+  <exec_depend>forward_command_controller</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joy</exec_depend>

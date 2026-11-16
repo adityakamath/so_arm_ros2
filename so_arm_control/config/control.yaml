@@ -15,6 +15,17 @@
     state_interfaces_broadcaster:
       type: state_interfaces_broadcaster/StateInterfacesBroadcaster
 
+    # MoveIt-mode controllers (see controller_modes.yaml). They claim the same joints as
+    # so_arm_controller, so control.launch.py loads them inactive unless their mode is selected.
+    arm_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    # The generic forward_command_controller (interface_name: position below), not
+    # position_controllers/JointGroupPositionController - that package is gone on Lyrical.
+    forward_position_controller:
+      type: forward_command_controller/ForwardCommandController
+    gripper_controller:
+      type: parallel_gripper_action_controller/GripperActionController
+
 /**/joint_state_broadcaster:
   ros__parameters:
     joints:
@@ -45,6 +56,45 @@
     allow_partial_joints_goal: true
     # Inert today - teleop_ik_node/GUI sliders always send zero-velocity endpoints.
     allow_nonzero_velocity_at_trajectory_end: true
+
+# Arm-only twin of so_arm_controller for MoveIt's FollowJointTrajectory execution - the gripper is
+# left to gripper_controller below, since two controllers can't both command gripper_joint.
+/**/arm_trajectory_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+    command_interfaces:
+      - position
+      - velocity
+    state_interfaces:
+      - position
+      - velocity
+    interpolate_from_desired_state: false
+    allow_partial_joints_goal: true
+    allow_nonzero_velocity_at_trajectory_end: true
+
+# Streams positions straight to the arm joints (MoveIt Servo's output). No interpolation,
+# velocity shaping or self-collision check - that is what the bridge adds on the teleop path.
+/**/forward_position_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_flex_joint
+      - wrist_flex_joint
+      - wrist_roll_joint
+    interface_name: position
+
+# `gripper_cmd` (control_msgs/ParallelGripperCommand) for MoveIt. allow_stalling lets a grasp
+# succeed when the jaw stops on an object instead of reaching the commanded position.
+/**/gripper_controller:
+  ros__parameters:
+    joint: gripper_joint
+    allow_stalling: true
 
 # Serial ping retry tolerance (real hardware only).
 /**/sts_hardware_interface_node:

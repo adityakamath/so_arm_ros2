@@ -70,6 +70,47 @@ class TestControlYaml:
 
 # ── joint_trajectory_bridge.yaml ──────────────────────────────────────────────
 
+# ── controller_modes.yaml ────────────────────────────────────────────────────
+
+class TestControllerModes:
+    """Motion controllers that fight over a joint are loaded together but never active together."""
+
+    def setup_method(self):
+        with open(os.path.join(_CFG, 'controller_modes.yaml')) as f:
+            self.modes = yaml.safe_load(f)
+        self.declared = set(_load('control.yaml')['controller_manager']['ros__parameters']) \
+            - {'update_rate', 'statistics_publish_rate', 'enforce_command_limits',
+               'handle_exceptions'}
+
+    def test_default_mode_is_teleop_with_the_bridge_controller(self):
+        assert self.modes['default_mode'] == 'teleop'
+        assert self.modes['modes']['teleop'] == ['so_arm_controller']
+
+    def test_every_named_controller_is_declared(self):
+        named = set(self.modes['always'])
+        for controllers in self.modes['modes'].values():
+            named |= set(controllers)
+        assert named <= self.declared, named - self.declared
+
+    def test_every_declared_motion_controller_is_in_some_mode(self):
+        in_modes = {c for names in self.modes['modes'].values() for c in names}
+        assert self.declared - set(self.modes['always']) == in_modes
+
+    def test_no_mode_activates_two_controllers_on_the_same_joints(self):
+        cfg = _load('control.yaml')
+        for mode, names in self.modes['modes'].items():
+            claimed = {}
+            for name in names:
+                params = cfg[name]['ros__parameters']
+                for joint in params.get('joints', [params.get('joint')]):
+                    assert joint not in claimed, f'{mode}: {joint} by {claimed[joint]} and {name}'
+                    claimed[joint] = name
+
+    def test_moveit_modes_leave_so_arm_controller_inactive(self):
+        for mode in ('moveit', 'servo'):
+            assert 'so_arm_controller' not in self.modes['modes'][mode]
+
+
 class TestJointTrajectoryBridgeYaml:
 
     def setup_method(self):

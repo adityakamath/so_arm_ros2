@@ -17,7 +17,11 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
-from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS, urdf_xacro_path
+from so_arm_control.so_arm_utils.namespacing import (
+    in_namespace, namespace_arg, resolve_frame_prefix,
+)
+from so_arm_control.so_arm_utils.robot_description import urdf_xacro_cmd
+from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS
 
 
 def launch_setup(context):
@@ -28,7 +32,9 @@ def launch_setup(context):
     effective_hw_type = LaunchConfiguration('ros2_control_hardware_type').perform(context)
     mujoco_headless = LaunchConfiguration('mujoco_headless').perform(context)
     mujoco_arena = LaunchConfiguration('mujoco_arena').perform(context)
-    frame_prefix = LaunchConfiguration('frame_prefix').perform(context)
+    namespace = LaunchConfiguration('namespace').perform(context)
+    frame_prefix = resolve_frame_prefix(
+        namespace, LaunchConfiguration('frame_prefix').perform(context))
     wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf').perform(context)
 
     pkg_desc = FindPackageShare('so_arm_description').perform(context)
@@ -59,27 +65,11 @@ def launch_setup(context):
     else:
         final_mujoco_model = ''
 
-    with open(f'{pkg_ctrl}/config/urdf_config.yaml') as f:
-        urdf_config = yaml.safe_load(f)
-
-    xacro_cmd = f'{xacro} {urdf_xacro_path(pkg_desc, model)}'
-    for key, value in urdf_config.items():
-        if isinstance(value, bool):
-            value = str(value).lower()
-        xacro_cmd += f' {key}:={value}'
-    if serial_port:
-        xacro_cmd += f' serial_port:={serial_port}'
-    if use_mock:
-        xacro_cmd += f' use_mock:={use_mock}'
-    if effective_hw_type != 'real':
-        xacro_cmd += f' ros2_control_hardware_type:={effective_hw_type}'
-    if effective_hw_type == 'mujoco':
-        xacro_cmd += (
-            f' mujoco_model:={final_mujoco_model}'
-            f' mujoco_headless:={mujoco_headless}'
-        )
-    if model == 'so101':  # only so101's xacro declares this arg - it's the only wrist camera model
-        xacro_cmd += f' wrist_camera_urdf:={wrist_camera_urdf}'
+    xacro_cmd = urdf_xacro_cmd(
+        xacro, pkg_desc, pkg_ctrl, model, serial_port=serial_port, use_mock=use_mock,
+        hardware_type=effective_hw_type, mujoco_model=final_mujoco_model,
+        mujoco_headless=mujoco_headless, wrist_camera_urdf=wrist_camera_urdf,
+    )
 
     robot_description = {
         'robot_description': ParameterValue(Command([xacro_cmd]), value_type=str)
@@ -160,11 +150,22 @@ def launch_setup(context):
         arguments=['state_interfaces_broadcaster', '-c', 'controller_manager',
                    '--controller-manager-timeout', '30', '--param-file', f.name], output='both',
     )
-    so_arm_controller_spawner = Node(
-        package='controller_manager', executable='spawner',
-        arguments=['so_arm_controller', '-c', 'controller_manager',
-                   '--controller-manager-timeout', '30', *spawner_params], output='both',
-    )
+    # Motion controllers that would fight over the same joints are all loaded, but only the
+    # selected mode's are activated (controller_modes.yaml); the rest start --inactive.
+    modes = yaml.safe_load(open(f'{pkg_ctrl}/config/controller_modes.yaml'))
+    controller_mode = LaunchConfiguration('controller_mode').perform(context) or modes['default_mode']
+    active_motion = set(modes['modes'][controller_mode])
+    motion_controllers = sorted({c for names in modes['modes'].values() for c in names})
+
+    def motion_spawner(name):
+        return Node(
+            package='controller_manager', executable='spawner',
+            arguments=[name, '-c', 'controller_manager', '--controller-manager-timeout', '30',
+                       *spawner_params, *([] if name in active_motion else ['--inactive'])],
+            output='both',
+        )
+    so_arm_controller_spawner = motion_spawner('so_arm_controller')
+    other_motion_spawners = [motion_spawner(n) for n in motion_controllers if n != 'so_arm_controller']
 
     # NOTE: lekiwi_control's stagger pattern (RegisterEventHandler+OnProcessStart) is NOT used
     # here - actions fired from an event handler callback run outside the synchronous visit
@@ -176,14 +177,17 @@ def launch_setup(context):
         TimerAction(period=2.5, actions=[so_arm_controller_spawner]),
         # After so_arm_controller: overlapping spawners hung the Jazzy test run at shutdown.
         TimerAction(period=3.0, actions=[state_interfaces_broadcaster_spawner]),
+        # Staggered one at a time for the same reason.
+        *[TimerAction(period=3.5 + 0.5 * i, actions=[spawner])
+          for i, spawner in enumerate(other_motion_spawners)],
     ]
 
-    return [
+    return in_namespace(namespace, [
         robot_state_publisher_node,
         control_node,
         *controller_spawner_actions,
         joint_trajectory_bridge_node,
-    ]
+    ])
 
 
 def generate_launch_description():
@@ -243,6 +247,15 @@ def generate_launch_description():
                 'so101 only: false omits the wrist camera mount/links/joints from '
                 'robot_description entirely (not just the driver node - see wrist_camera arg '
                 'in so_arm_bringup for that).'
+            ),
+        ),
+        namespace_arg(),
+        DeclareLaunchArgument(
+            'controller_mode',
+            default_value='',
+            description=(
+                'Which motion controllers start active (config/controller_modes.yaml): teleop '
+                '(so_arm_controller; empty = the file default_mode), moveit, or servo.'
             ),
         ),
     ]
