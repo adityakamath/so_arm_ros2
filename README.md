@@ -19,6 +19,7 @@ This repository is a work in progress and includes experimental and AI-generated
 | [`so_arm_bringup`](so_arm_bringup/README.md) | Top-level launch files, teach-and-repeat record/replay, wrist camera driver |
 | [`so_arm_control`](so_arm_control/README.md) | `ros2_control` setup, IK teleop, self-collision-checked trajectory bridge, control/teleop-only launch files |
 | [`so_arm_description`](so_arm_description/README.md) | URDF models and meshes for SO100 and SO101 |
+| [`so_arm_moveit`](so_arm_moveit/README.md) | MoveIt 2 motion planning for SO100 and SO101, executing through `so_arm_control`'s controller |
 | [`so_arm_mujoco`](so_arm_mujoco/README.md) | MuJoCo models generated from the URDF, a standalone (no ROS) viewer, and Gymnasium environments |
 
 This is built alongside, not vendored in this tree:
@@ -89,6 +90,7 @@ ros2 launch so_arm_bringup so_arm.launch.py model:=so100                       #
 ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true                     # no hardware, simulated motors
 ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco # MuJoCo simulation
 ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco mujoco_arena:=true  # + graspable cubes/tray
+ros2 launch so_arm_bringup so_arm.launch.py namespace:=arm1                    # everything under /arm1, tf frames "arm1/..."
 ros2 launch so_arm_bringup leader_follower.launch.py                           # dual-arm leader-follower
 ```
 
@@ -113,6 +115,8 @@ The most common arguments for `so_arm_bringup so_arm.launch.py` (`--show-argumen
 | `use_sim_time` | `false` | Use `/clock` from a simulator instead of system time |
 | `mujoco_headless` | `false` | `mujoco` only: suppress the viewer window |
 | `mujoco_arena` | `false` | `mujoco` only: `true` adds a small tabletop workspace within reach - three graspable cubes and a tray - on top of the default flat skybox+floor scene |
+| `namespace` | `""` | ROS namespace for every node (e.g. `arm1`). Every launch file in this repo takes it; it also sets the tf frame prefix to `arm1/` unless `frame_prefix` is given |
+| `frame_prefix` | `""` | Prefix for every published TF `frame_id`; empty derives it from `namespace`, or none |
 | `wrist_camera` | `true` | Launch the wrist camera driver (real hardware only); `false` if this arm has none fitted |
 | `wrist_camera_urdf` | `true` | SO101 only: `false` omits the wrist camera mount/links/joints from `robot_description` |
 | `replay_loops` | `""` | Override teach-and-repeat's `replay_loops` (`0` = loop forever, `N>0` = exactly `N` passes); empty uses the yaml default |
@@ -154,6 +158,17 @@ Replay always takes priority over manual control while active — see `joint_sta
 ## Gripper compliance (experimental, untested)
 
 `teleop_ik_node`'s `effort_gain` parameter (`so_arm_control/config/teleop.yaml`, default `0.0`) shifts the commanded gripper position away from the raw joystick/GUI target in proportion to `gripper_joint`'s sensed load, so closing on an object yields instead of driving through it — a software approximation of impedance control that stays entirely in Mode 0 (Position): the onboard servo PID remains the fast inner loop, so a stalled host still just holds position rather than pushing indefinitely. Sign and magnitude are uncalibrated — start at `0.0` and raise gradually.
+
+## MoveIt
+
+[`so_arm_moveit`](so_arm_moveit/README.md) plans and executes motions for either model, with MoveIt Servo as an option. MoveIt is packaged for both kilted and lyrical on robostack; it is only tested on kilted. Run it next to the control stack:
+
+```bash
+ros2 launch so_arm_control control.launch.py use_mock:=true
+ros2 launch so_arm_moveit move_group.launch.py
+```
+
+MoveIt needs different controllers than teleop (an arm-only trajectory controller and a gripper action controller), so its launch file switches the running control stack into [`moveit` mode](so_arm_control/README.md#controller-modes) and back to the default `teleop` mode on exit - nothing is switched by hand, and teleop, record/replay and the bridge are unaffected. `servo:=true` runs MoveIt Servo instead. It takes the same `namespace` option, so `namespace:=arm1` on both targets a namespaced arm.
 
 ## Leader-follower (dual arm)
 

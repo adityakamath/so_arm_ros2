@@ -1,0 +1,34 @@
+# MoveIt Servo (servo:=true). Streams joint positions to forward_position_controller, which is
+# only active in so_arm_control's `servo` controller mode. Loaded under the `moveit_servo` key.
+publish_period: 0.02  # [s]; matches the controller manager's 50 Hz
+max_expected_latency: 0.1
+command_in_type: speed_units  # m/s and rad/s; "unitless" is -1..1 like a joystick
+scale:
+  linear: 0.1  # [m/s] max, Cartesian commands only
+  rotational: 0.4  # [rad/s] max, Cartesian commands only
+  joint: 0.3  # [rad/s] max
+command_out_type: std_msgs/Float64MultiArray
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+use_smoothing: true
+smoothing_filter_plugin_name: "online_signal_smoothing::AccelerationLimitedPlugin"
+is_primary_planning_scene_monitor: true
+check_octomap_collisions: false
+move_group_name: manipulator
+# 5-DOF arm: the 6D Jacobian is rank-deficient, so the conditioning is far worse than a 6/7-DOF
+# arm's and MoveIt's defaults (10/30) would stop it almost immediately. Starting values - tune.
+lower_singularity_threshold: 100.0
+hard_stop_singularity_threshold: 300.0
+leaving_singularity_threshold_multiplier: 2.0
+joint_limit_margins: [0.1]
+# Relative names, so they resolve under the namespace.
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic: ~/delta_joint_cmds
+joint_topic: joint_states
+status_topic: ~/status
+command_out_topic: forward_position_controller/commands
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02

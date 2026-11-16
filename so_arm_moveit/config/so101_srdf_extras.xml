@@ -1,0 +1,30 @@
+  <!-- Inserted into so_arm_control/config/so101.srdf (the generated one, which owns the
+       'manipulator' group and every disable_collisions pair) by move_group.launch.py. -->
+  <group name="gripper">
+    <joint name="gripper_joint" />
+  </group>
+
+  <!-- shoulder_lift upper limit is 1.74533, so rest sits just inside it. -->
+  <group_state name="zero" group="manipulator">
+    <joint name="shoulder_pan_joint" value="0" />
+    <joint name="shoulder_lift_joint" value="0" />
+    <joint name="elbow_flex_joint" value="0" />
+    <joint name="wrist_flex_joint" value="0" />
+    <joint name="wrist_roll_joint" value="0" />
+  </group_state>
+  <group_state name="rest" group="manipulator">
+    <joint name="shoulder_pan_joint" value="0" />
+    <joint name="shoulder_lift_joint" value="1.74" />
+    <joint name="elbow_flex_joint" value="-1.57" />
+    <joint name="wrist_flex_joint" value="-1.0" />
+    <joint name="wrist_roll_joint" value="0" />
+  </group_state>
+  <!-- open matches pick_place.py's GRIP_OPEN; closed is the range's upper end (0.1745). -->
+  <group_state name="open" group="gripper">
+    <joint name="gripper_joint" value="-1.4" />
+  </group_state>
+  <group_state name="closed" group="gripper">
+    <joint name="gripper_joint" value="0.17" />
+  </group_state>
+
+  <end_effector name="gripper" parent_link="end_effector_link" group="gripper" parent_group="manipulator" />
