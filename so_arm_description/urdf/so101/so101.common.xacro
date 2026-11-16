@@ -44,4 +44,16 @@
   <!-- REP-103 optical frame (+Z forward, +X right, +Y down) as child of wrist_camera_frame. -->
   <xacro:property name="wrist_camera_optical_rpy" value="-1.5708 0 -1.5708"/>
 
+  <!-- Robonine parallel gripper (gripper_type:=parallel), replaces the wrist roll follower/fixed
+       jaw on the wrist roll horn. Robonine's URDF has world-aligned link frames, so the frame and
+       both clamp meshes share this one pose in gripper_link at q=0 - found by ICP-fitting their
+       link4_1 mesh onto our wrist_link (0.4 mm median), roll chosen so the clamps slide along
+       gripper_link X like the standard jaw closes. Fingers touch at q=0 and open outward. -->
+  <xacro:property name="parallel_gripper_mesh_xyz" value="0.00976563 -0.152025 0.121313"/>
+  <xacro:property name="parallel_gripper_mesh_rpy" value="1.5682 -0.000452164 -3.1241"/>
+  <!-- 14-tooth module-1 pinion on the servo horn: finger travel = radius * servo angle. -->
+  <xacro:property name="parallel_pinion_radius" value="0.007"/>
+  <!-- Midway along the 80 mm finger pads, 11 mm in from the tips (z=-0.131). -->
+  <xacro:property name="parallel_end_effector_xyz" value="0 0 -0.12"/>
+
 </robot>

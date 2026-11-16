@@ -9,8 +9,10 @@ URDF/xacro models of the SO-ARM100 family: SO100 and SO101, 5-DOF + gripper arms
 | `urdf/so100/so100.urdf.xacro`, `urdf/so101/so101.urdf.xacro` | Links, joints and the `<ros2_control>` block, plus the xacro arguments below |
 | `urdf/*/*.control.xacro` | Shared hardware parameters: serial port, motor IDs, PID coefficients, joint limits |
 | `urdf/*/*.common.xacro` | Geometry constants: colours and joint origins (from onshape-to-robot calibration) |
-| `urdf/*/*.urdf` | Pre-generated URDFs of both models |
+| `urdf/so101/so101.parallel_gripper.xacro` | Robonine parallel gripper, swapped in for the SO101 jaw by `gripper_type:=parallel` |
+| `urdf/*/*.urdf` | Pre-generated URDFs of both models, plus `so101_parallel.urdf` (`gripper_type:=parallel`) |
 | `meshes/so100/`, `meshes/so101/` | STL files for each model, including the SO101 wrist camera mount |
+| `meshes/parallel_gripper/` | [Robonine parallel gripper](https://github.com/roboninecom/SO-ARM100-101-102-Parallel-Gripper) frame and clamps (fits SO-100/101/102; licences in its `NOTICE`) |
 
 ## Requirements
 
@@ -43,6 +45,9 @@ Pass these to `xacro` as `name:=value`. `so_arm_control` fills most of them in f
 | `ros2_control_hardware_type` | `real` | Hardware plugin: `real`, `mujoco` or `mock_components` |
 | `mujoco_model`, `mujoco_headless` | `""`, `false` | `mujoco` only: the generated MJCF and whether to skip the viewer |
 | `wrist_camera_urdf` | `true` | SO101 only: `false` omits the wrist camera mount/links/joints entirely |
+| `gripper_type` | `standard` | SO101 only: `parallel` swaps the jaw for the Robonine parallel gripper (and drops the wrist camera, whose mount needs the standard jaw) |
+
+With `gripper_type:=parallel`, `gripper_joint` stays the single actuated joint in servo radians - the servo turns a 7 mm pinion, `0` is closed, `-5.29` fully open (37 mm per finger, 74 mm between pads) - so `sts_hardware_interface` and the controllers are unchanged. `left_finger_joint`/`right_finger_joint` are prismatic `<mimic>`s of it (`robot_state_publisher` fills in their TF).
 
 Joint limits, motor IDs and PID values live in `*.control.xacro`'s property defaults; joint origins and colours in `*.common.xacro`. Edit those files directly to change them — they aren't exposed as xacro arguments.
 
@@ -58,6 +63,8 @@ base_footprint
                     └── gripper_link ─ wrist_roll_joint
                         ├── end_effector_link          ← fixed, teleop/IK target frame
                         ├── moving_jaw_link ─ gripper_joint
+                        │   (gripper_type:=parallel: gripper_pinion_link ─ gripper_joint,
+                        │    left_finger_link / right_finger_link ─ prismatic mimics, no camera)
                         ├── wrist_camera_mount_link     ← SO101 + wrist_camera_urdf:=true only
                         │   └── wrist_camera_body_link
                         └── wrist_camera_frame          ← same condition, separate fixed joint off gripper_link

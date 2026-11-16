@@ -1,0 +1,15 @@
+Robonine SO-ARM100/101/102 Parallel Gripper meshes
+https://github.com/roboninecom/SO-ARM100-101-102-Parallel-Gripper
+(simulation/so_arm_101_description/meshes/{visual,collision}/)
+
+Files copied unmodified, renamed only (millimetre units, scaled 0.001 in the URDF/MJCF):
+
+  frame.stl, frame_collision.stl              <- link5_1.stl
+      Copyright (c) The Robot Studio and the SO-ARM100 contributors
+      Copyright (c) 2025 Robonine
+      SPDX-License-Identifier: Apache-2.0
+
+  clamp_right.stl, clamp_right_collision.stl  <- clamp_1.stl
+  clamp_left.stl, clamp_left_collision.stl    <- clamp_2.stl
+      Copyright (c) 2025 Robonine
+      SPDX-License-Identifier: CERN-OHL-P-2.0 (see CERN-OHL-P-2.0.txt)

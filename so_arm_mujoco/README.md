@@ -98,6 +98,7 @@ No reward, task or termination logic is defined here on purpose — this provide
 |----------|---------|---------|
 | `--model` | `so101` | `so100` or `so101` |
 | `--no-wrist-camera` | off | Drops the SO101 wrist camera bodies from the compiled model |
+| `--gripper` | `standard` | SO101 only: `parallel` uses the Robonine parallel gripper (xacro arg `gripper_type`, `build_model_xml(gripper=...)`); no wrist camera |
 | `--scene` | `flat` | `flat` (skybox+floor), `arena` (flat + three graspable cubes and a tray, all within SO101's reach - `teleop_ik --scene arena` is the natural way to try it), or `none` (compose into an external scene) |
 | `--headless` | off | `cli.py preview` only: step and exit, no GUI |
 

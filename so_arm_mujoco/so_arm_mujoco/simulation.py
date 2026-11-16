@@ -56,6 +56,8 @@ def mujoco_share_dir() -> str:
 
 
 VALID_SCENES = ('flat', 'arena', 'none')
+# standard: the SO-101 jaw; parallel: Robonine's parallel gripper (so101 only, no wrist camera).
+VALID_GRIPPERS = ('standard', 'parallel')
 
 
 def build_model_xml(
@@ -64,6 +66,7 @@ def build_model_xml(
     scene: str = 'flat',
     description_share: str = None,
     mujoco_share: str = None,
+    gripper: str = 'standard',
 ) -> str:
     """xacro so_arm.mjcf.xacro -> compiled MJCF XML string.
 
@@ -77,6 +80,10 @@ def build_model_xml(
     SO101's measured reach - see mjcf/scenes/arena.mjcf.xacro) or `'none'` to omit the
     free-standing scene entirely, e.g. to compose the arm into an external one instead.
 
+    `gripper='parallel'` swaps so101's jaw for Robonine's parallel gripper - gripper_joint keeps
+    its name (servo radians, 0=closed) and drives two equality-coupled slide fingers. It has no
+    wrist camera mount, so wrist_camera is ignored.
+
     For the defaults (wrist_camera=True, scene='flat', no description_share override), this
     skips the xacro recompile and reads mjcf/<model>.xml directly instead - so100/so101's
     geometry is fixed (sourced from URDF, which doesn't change), so that committed file doesn't
@@ -88,10 +95,14 @@ def build_model_xml(
         raise ValueError(f'model must be one of {VALID_MODELS}, got {model!r}')
     if scene not in VALID_SCENES:
         raise ValueError(f'scene must be one of {VALID_SCENES}, got {scene!r}')
+    if gripper not in VALID_GRIPPERS:
+        raise ValueError(f'gripper must be one of {VALID_GRIPPERS}, got {gripper!r}')
+    if gripper == 'parallel' and model != 'so101':
+        raise ValueError(f"gripper='parallel' is only available for so101, got {model!r}")
 
     mujoco_dir = mujoco_share or mujoco_share_dir()
 
-    if wrist_camera and scene == 'flat' and description_share is None:
+    if wrist_camera and scene == 'flat' and gripper == 'standard' and description_share is None:
         static_path = committed_mjcf_path(model, mujoco_dir)
         if static_path.is_file():
             desc_dir = description_share_dir()
@@ -107,6 +118,7 @@ def build_model_xml(
         'so_arm_config': model,
         'scene': scene,
         'wrist_camera_mjcf': 'true' if wrist_camera else 'false',
+        'gripper_type': gripper,
     }
     doc = xacro.parse(raw)
     xacro.process_doc(doc, mappings=mappings)

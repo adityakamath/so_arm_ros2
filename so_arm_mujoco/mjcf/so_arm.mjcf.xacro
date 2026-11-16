@@ -9,6 +9,12 @@
   <xacro:arg name="scene" default="flat"/>
   <!-- so101 only; mirrors urdf's wrist_camera_urdf arg. False omits the camera bodies below. -->
   <xacro:arg name="wrist_camera_mjcf" default="true"/>
+  <!-- so101 only; mirrors urdf's gripper_type arg: standard (default) or parallel (Robonine
+       parallel gripper, see so_arm_description's so101.parallel_gripper.xacro). The wrist camera
+       mount bolts onto the standard jaw, so parallel always omits the camera. -->
+  <xacro:arg name="gripper_type" default="standard"/>
+  <xacro:property name="parallel_gripper" value="${'$(arg gripper_type)' == 'parallel'}"/>
+  <xacro:property name="wrist_camera" value="${'$(arg wrist_camera_mjcf)' == 'true' and not parallel_gripper}"/>
   <xacro:property name="so_arm_config" value="$(arg so_arm_config)"/>
 
   <compiler angle="radian"/>
@@ -34,7 +40,16 @@
     <position class="sts3215" name="elbow_flex_joint" joint="elbow_flex_joint" inheritrange="1"/>
     <position class="sts3215" name="wrist_flex_joint" joint="wrist_flex_joint" inheritrange="1"/>
     <position class="sts3215" name="wrist_roll_joint" joint="wrist_roll_joint" inheritrange="1"/>
-    <position class="sts3215" name="gripper_joint" joint="gripper_joint" inheritrange="1"/>
+    <xacro:unless value="${parallel_gripper}">
+      <position class="sts3215" name="gripper_joint" joint="gripper_joint" inheritrange="1"/>
+    </xacro:unless>
+    <!-- Through the 7 mm pinion the servo's full 8.5 Nm would squeeze ~600 N per finger, which
+         soft contacts can't hold (pads sink into the object and squirt it out). Capped at
+         ~100 N per finger: firm, and nearer what a printed rack drive actually delivers. -->
+    <xacro:if value="${parallel_gripper}">
+      <position class="sts3215" name="gripper_joint" joint="gripper_joint" inheritrange="1"
+                forcerange="-1.4 1.4"/>
+    </xacro:if>
   </actuator>
 
   <xacro:if value="${so_arm_config == 'so100'}">
@@ -157,6 +172,19 @@
       <mesh name="wrist_camera_so101_v1" file="$(find so_arm_description)/meshes/so101/wrist_camera_so101_v1.stl"/>
       <mesh name="moving_jaw_so101_v1" file="$(find so_arm_description)/meshes/so101/moving_jaw_so101_v1.stl"/>
     </asset>
+    <xacro:if value="${parallel_gripper}">
+      <asset>
+        <mesh name="parallel_gripper_frame" file="$(find so_arm_description)/meshes/parallel_gripper/frame.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="parallel_gripper_frame_collision" file="$(find so_arm_description)/meshes/parallel_gripper/frame_collision.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="parallel_gripper_clamp_right" file="$(find so_arm_description)/meshes/parallel_gripper/clamp_right.stl" scale="0.001 0.001 0.001"/>
+        <mesh name="parallel_gripper_clamp_left" file="$(find so_arm_description)/meshes/parallel_gripper/clamp_left.stl" scale="0.001 0.001 0.001"/>
+      </asset>
+      <!-- URDF <mimic>: finger travel = -pinion_radius * gripper_joint (both fingers open outward). -->
+      <equality>
+        <joint joint1="right_finger_joint" joint2="gripper_joint" polycoef="0 -0.007 0 0 0" solref="0.004 1"/>
+        <joint joint1="left_finger_joint" joint2="gripper_joint" polycoef="0 -0.007 0 0 0" solref="0.004 1"/>
+      </equality>
+    </xacro:if>
 
     <!-- Ported from ros2_so_arm's so_arm101.xml, verified against our URDF (gripper_joint recomputed below). -->
     <!-- Every joint below is axis="0 0 -1", and must stay that way. They were all "0 0 1"
@@ -174,6 +202,55 @@
          Re-deriving that for so101 gives "0 0 -1" six times over. Do not "tidy" these to match
          the URDF text - that re-breaks sim-to-real. If a teleop direction needs reversing,
          negate it in teleop_ik.py, where the compensation is visible and tested. -->
+    <!-- Contents of gripper_link for gripper_type:=parallel - poses/inertials verbatim from
+         so101.parallel_gripper.xacro / so101.common.xacro (quat = parallel_gripper_mesh_rpy).
+         Collision uses pad boxes, not the clamp meshes: MuJoCo collides a mesh as its convex
+         hull, and an L-shaped clamp's hull (carriage + finger) would fill the gap between the
+         fingers. Box = the 80 mm finger's flat inner face down to the tip (z=-0.131).
+         solref at its 2x-timestep floor: the default lets pads sink ~1 cm into a light object
+         at full grip force (contact stiffness scales with the object's own small mass). -->
+    <xacro:macro name="so_arm101_parallel_gripper">
+      <inertial pos="0.000285376 0.0153772 -0.040415" mass="0.138284"
+                fullinertia="0.0001439 0.0001834 0.0002443 5.447e-07 1.68e-07 -2.104e-05"/>
+      <geom class="visual" pos="0.00976563 -0.152025 0.121313" quat="-0.006351 -0.00601522 0.706162 0.707996"
+            mesh="parallel_gripper_frame" material="light_grey"/>
+      <geom class="collision" pos="0.00976563 -0.152025 0.121313" quat="-0.006351 -0.00601522 0.706162 0.707996"
+            mesh="parallel_gripper_frame_collision"/>
+      <site group="5" name="end_effector_link" pos="0 0 -0.12"
+            quat="0.707105 0 0.707108 0" rgba="0 0 0 0"/>
+
+      <!-- Half the servo's armature stays here, the other half is reflected onto the fingers
+           through the 7 mm pinion (0.016 / r^2 / 2 fingers each). With it all here, the equality
+           coupling's effective mass is just the 38 g fingers, so a grasped object pushes them
+           out of sync with the servo instead of stalling it; with none here the joint diverges. -->
+      <body name="gripper_pinion_link">
+        <joint axis="0 0 1" name="gripper_joint" range="-5.285714 0" class="sts3215" armature="0.01623"/>
+        <inertial pos="0 0 0" mass="0.003" diaginertia="1e-7 1e-7 1e-7"/>
+      </body>
+
+      <body name="right_finger_link">
+        <joint axis="-1 0 0" name="right_finger_joint" type="slide" range="0 0.037"
+               armature="165.6" damping="0.1"/>
+        <inertial pos="-0.00805906 -0.0012937 -0.0741853" mass="0.0382429"
+                  fullinertia="2.136e-05 1.816e-05 1.02e-05 5.534e-07 2.271e-07 1.019e-06"/>
+        <geom class="visual" pos="0.00976563 -0.152025 0.121313" quat="-0.006351 -0.00601522 0.706162 0.707996"
+              mesh="parallel_gripper_clamp_right" material="charcoal"/>
+        <geom class="collision" type="box" pos="-0.0055 0.0004 -0.1005" size="0.005 0.010 0.0305"
+              solref="0.004 1" solimp="0.95 0.99 0.001"/>
+      </body>
+
+      <body name="left_finger_link">
+        <joint axis="1 0 0" name="left_finger_joint" type="slide" range="0 0.037"
+               armature="165.6" damping="0.1"/>
+        <inertial pos="0.00710229 0.00171947 -0.0741827" mass="0.0382429"
+                  fullinertia="2.136e-05 1.817e-05 1.019e-05 5.536e-07 -2.353e-07 -9.783e-07"/>
+        <geom class="visual" pos="0.00976563 -0.152025 0.121313" quat="-0.006351 -0.00601522 0.706162 0.707996"
+              mesh="parallel_gripper_clamp_left" material="charcoal"/>
+        <geom class="collision" type="box" pos="0.0055 0.0004 -0.1005" size="0.005 0.010 0.0305"
+              solref="0.004 1" solimp="0.95 0.99 0.001"/>
+      </body>
+    </xacro:macro>
+
     <xacro:macro name="so_arm101_body">
       <body name="base_link">
         <inertial pos="0.0137179 -5.19711e-05 0.0334843" mass="0.147"
@@ -250,6 +327,10 @@
                 <!-- quat carries so101_new_calib.xml's wrist_roll calibration offset (matches URDF). -->
                 <body name="gripper_link" pos="0 -0.0611 0.0181" quat="0.0172091 -0.0172091 0.706897 0.706897">
                   <joint axis="0 0 -1" name="wrist_roll_joint" range="-2.74385 2.84121" class="sts3215"/>
+                  <xacro:if value="${parallel_gripper}">
+                    <xacro:so_arm101_parallel_gripper/>
+                  </xacro:if>
+                  <xacro:unless value="${parallel_gripper}">
                   <inertial pos="0.000213627 0.000245138 -0.025187" mass="0.087"
                             fullinertia="2.75087e-05 4.33657e-05 3.45059e-05 -3.35241e-07 -5.7352e-06 -5.17847e-08"/>
                   <geom class="visual" pos="0.0077 0.0001 -0.0234" quat="0.707107 -0.707107 0 0"
@@ -261,7 +342,7 @@
                   <geom class="collision" pos="0 -0.000218214 0.000949706" quat="0 1 0 0"
                         mesh="wrist_roll_follower_so101_v1" material="light_grey"/>
 
-                  <xacro:if value="${'$(arg wrist_camera_mjcf)' == 'true'}">
+                  <xacro:if value="${wrist_camera}">
                     <body name="wrist_camera_mount_link" pos="-0.0150 0.0240 -0.0315" quat="0.499798 -0.5002 0.499802 -0.5002">
                       <inertial pos="0 0 0" mass="0.02" diaginertia="1e-5 1e-5 1e-5"/>
                       <geom class="visual" pos="0 0 0" quat="1 0 0 0"
@@ -319,6 +400,7 @@
                     <geom class="collision" pos="0 0 0.0189" quat="1 0 0 0"
                           mesh="moving_jaw_so101_v1" material="light_grey"/>
                   </body>
+                  </xacro:unless>
                 </body>
               </body>
             </body>
@@ -335,8 +417,18 @@
       <exclude body1="upper_arm_link" body2="lower_arm_link"/>
       <exclude body1="lower_arm_link" body2="wrist_link"/>
       <exclude body1="wrist_link" body2="gripper_link"/>
-      <exclude body1="gripper_link" body2="moving_jaw_link"/>
-      <xacro:if value="${'$(arg wrist_camera_mjcf)' == 'true'}">
+      <xacro:unless value="${parallel_gripper}">
+        <exclude body1="gripper_link" body2="moving_jaw_link"/>
+      </xacro:unless>
+      <xacro:if value="${parallel_gripper}">
+        <!-- Clamps ride inside the frame and touch each other at q=0 (closed). -->
+        <exclude body1="gripper_link" body2="right_finger_link"/>
+        <exclude body1="gripper_link" body2="left_finger_link"/>
+        <exclude body1="right_finger_link" body2="left_finger_link"/>
+        <exclude body1="shoulder_link" body2="right_finger_link"/>
+        <exclude body1="shoulder_link" body2="left_finger_link"/>
+      </xacro:if>
+      <xacro:if value="${wrist_camera}">
         <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
         <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
         <exclude body1="gripper_link" body2="wrist_camera_body_link"/>

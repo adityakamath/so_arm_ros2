@@ -116,3 +116,41 @@ def test_position_operating_mode_is_default(model):
             f'{model}: {joint.get("name")} command interfaces {cmd_interfaces} '
             "!= {'position', 'velocity'} under the default operating mode"
         )
+
+
+# ── SO-101 parallel gripper (gripper_type:=parallel) ────────────────────────────────────────
+
+def test_parallel_gripper_replaces_jaw_and_mimics_gripper_joint():
+    root = _process_urdf('so101', gripper_type='parallel')
+    joints = {j.get('name'): j for j in root.findall('joint')}
+    links = {link.get('name') for link in root.findall('link')}
+
+    assert 'moving_jaw_link' not in links
+    assert not any('wrist_camera' in name for name in links), 'camera mount needs the standard jaw'
+    for side in ('left', 'right'):
+        finger = joints[f'{side}_finger_joint']
+        assert finger.get('type') == 'prismatic'
+        mimic = finger.find('mimic')
+        assert mimic.get('joint') == 'gripper_joint'
+        # 0 rad = closed fingers; fully open servo angle = full finger stroke
+        lower = float(joints['gripper_joint'].find('limit').get('lower'))
+        stroke = float(finger.find('limit').get('upper'))
+        assert float(mimic.get('multiplier')) * lower == pytest.approx(stroke)
+
+    rc_joints = {j.get('name'): j for j in root.find('ros2_control').findall('joint')}
+    assert set(rc_joints) == set(_MOVABLE_JOINTS), 'fingers are mimics, not ros2_control joints'
+    assert float(rc_joints['gripper_joint'].find("param[@name='min_position']").text) == (
+        pytest.approx(lower))
+    for rel_path in _mesh_paths(root):
+        assert os.path.isfile(os.path.join(_SHARE, rel_path)), rel_path
+
+
+def test_committed_parallel_urdf_matches_xacro():
+    """urdf/so101/so101_parallel.urdf is the xacro output with package:// made relative."""
+    with open(os.path.join(_SHARE, 'urdf', 'so101', 'so101_parallel.urdf')) as f:
+        committed = ET.fromstring(f.read())
+    live = _process_urdf('so101', gripper_type='parallel')
+    for mesh in live.iter('mesh'):
+        mesh.set('filename', mesh.get('filename').replace('package://so_arm_description/', '../../'))
+    assert ET.tostring(committed) == ET.tostring(live), (
+        'so101_parallel.urdf is stale - regenerate it from so101.urdf.xacro gripper_type:=parallel')

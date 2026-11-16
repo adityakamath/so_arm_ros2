@@ -12,6 +12,7 @@ from pathlib import Path
 import mujoco
 
 from so_arm_mujoco.simulation import (
+    VALID_GRIPPERS,
     VALID_MODELS,
     VALID_SCENES,
     Simulation,
@@ -21,8 +22,10 @@ from so_arm_mujoco.simulation import (
 )
 
 
-def _build_sim(model: str, wrist_camera: bool, scene: str = 'flat') -> Simulation:
-    xml = build_model_xml(model, wrist_camera=wrist_camera, scene=scene)
+def _build_sim(
+    model: str, wrist_camera: bool, scene: str = 'flat', gripper: str = 'standard',
+) -> Simulation:
+    xml = build_model_xml(model, wrist_camera=wrist_camera, scene=scene, gripper=gripper)
     sim = Simulation(mujoco.MjModel.from_xml_string(xml))
     sim.reset()
     return sim
@@ -30,8 +33,9 @@ def _build_sim(model: str, wrist_camera: bool, scene: str = 'flat') -> Simulatio
 
 def run_headless(
     model: str, steps: int = 200, wrist_camera: bool = True, scene: str = 'flat',
+    gripper: str = 'standard',
 ) -> dict:
-    sim = _build_sim(model, wrist_camera, scene)
+    sim = _build_sim(model, wrist_camera, scene, gripper)
     sim.step(count=steps)
     return sim.info()
 
@@ -43,7 +47,9 @@ CONTROL_VALUES = "Right sidebar's Control panel\nSpace"
 STATUS_LABELS = 'Model\nTime\nStatus'
 
 
-def run_interactive(model: str, wrist_camera: bool = True, scene: str = 'flat'):
+def run_interactive(
+    model: str, wrist_camera: bool = True, scene: str = 'flat', gripper: str = 'standard',
+):
     import time
 
     import glfw
@@ -51,7 +57,7 @@ def run_interactive(model: str, wrist_camera: bool = True, scene: str = 'flat'):
 
     from so_arm_mujoco.keyboard import EStop, HeldKeys
 
-    sim = _build_sim(model, wrist_camera, scene)
+    sim = _build_sim(model, wrist_camera, scene, gripper)
 
     message = 'Held-key input attached (space=e-stop)'
     keys = HeldKeys({glfw.KEY_SPACE}, edge_keys={glfw.KEY_SPACE}, attached_message=message)
@@ -92,6 +98,10 @@ def build_main(argv=None):
         '--scene', choices=VALID_SCENES, default='flat',
         help="flat (default), arena (graspable cubes/tray), or none (compose externally)",
     )
+    parser.add_argument(
+        '--gripper', choices=VALID_GRIPPERS, default='standard',
+        help='standard SO-101 jaw (default) or the Robonine parallel gripper (so101 only)',
+    )
     parser.add_argument('--description-package', type=str, default=None)
     parser.add_argument(
         '--commit', action='store_true',
@@ -113,6 +123,7 @@ def build_main(argv=None):
         wrist_camera=not args.no_wrist_camera,
         scene=args.scene,
         description_share=args.description_package,
+        gripper=args.gripper,
     )
     if args.output:
         Path(args.output).write_text(xml)
@@ -129,6 +140,10 @@ def preview_main(argv=None):
         '--scene', choices=VALID_SCENES, default='flat',
         help="flat (default), arena (graspable cubes/tray), or none (compose externally)",
     )
+    parser.add_argument(
+        '--gripper', choices=VALID_GRIPPERS, default='standard',
+        help='standard SO-101 jaw (default) or the Robonine parallel gripper (so101 only)',
+    )
     parser.add_argument('--headless', action='store_true', help='No GUI; step and exit')
     parser.add_argument('--steps', type=int, default=200, help='--headless only')
     args = parser.parse_args(argv)
@@ -136,10 +151,13 @@ def preview_main(argv=None):
     if args.headless:
         print(run_headless(
             args.model, steps=args.steps, wrist_camera=not args.no_wrist_camera,
-            scene=args.scene,
+            scene=args.scene, gripper=args.gripper,
         ))
     else:
-        run_interactive(args.model, wrist_camera=not args.no_wrist_camera, scene=args.scene)
+        run_interactive(
+            args.model, wrist_camera=not args.no_wrist_camera, scene=args.scene,
+            gripper=args.gripper,
+        )
 
 
 def main():

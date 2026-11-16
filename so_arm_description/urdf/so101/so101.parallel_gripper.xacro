@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<!-- Robonine SO-ARM100/101/102 parallel gripper (github.com/roboninecom/SO-ARM100-101-102-Parallel-Gripper,
+     meshes/parallel_gripper/NOTICE) on the SO-101 wrist roll, selected with gripper_type:=parallel.
+
+     gripper_joint stays the one actuated joint, in servo radians, so sts_hardware_interface, the
+     controllers and teleop see the same joint as with the standard jaw. It spins a massless-ish
+     pinion; both fingers are prismatic mimics of it (travel = -pinion_radius * angle).
+     Masses: Robonine's CAD masses assume solid parts (their wrist link weighs 4x ours), so they
+     are scaled by our wrist_link / their link4_1 mass (0.2486). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="so101_parallel_gripper">
+    <xacro:property name="mesh_dir" value="package://so_arm_description/meshes/parallel_gripper"/>
+
+    <link name="gripper_link">
+      <inertial>
+        <origin xyz="0.000285376 0.0153772 -0.040415" rpy="0 0 0"/>
+        <mass value="0.138284"/>
+        <inertia ixx="0.0001439" ixy="5.447e-07" ixz="1.68e-07" iyy="0.0001834" iyz="-2.104e-05" izz="0.0002443"/>
+      </inertial>
+      <visual>
+        <origin xyz="${parallel_gripper_mesh_xyz}" rpy="${parallel_gripper_mesh_rpy}"/>
+        <geometry>
+          <mesh filename="${mesh_dir}/frame.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="light_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="${parallel_gripper_mesh_xyz}" rpy="${parallel_gripper_mesh_rpy}"/>
+        <geometry>
+          <mesh filename="${mesh_dir}/frame_collision.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="gripper_pinion_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.003"/>
+        <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+      </inertial>
+    </link>
+
+    <joint name="gripper_joint" type="revolute">
+      <parent link="gripper_link"/>
+      <child link="gripper_pinion_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${parallel_gripper_lower}" upper="${parallel_gripper_upper}" effort="${max_torque_nm}" velocity="1e6"/>
+    </joint>
+
+    <xacro:macro name="finger" params="side axis com ixy ixz iyz">
+      <link name="${side}_finger_link">
+        <inertial>
+          <origin xyz="${com}" rpy="0 0 0"/>
+          <mass value="0.0382429"/>
+          <inertia ixx="2.136e-05" ixy="${ixy}" ixz="${ixz}" iyy="1.816e-05" iyz="${iyz}" izz="1.02e-05"/>
+        </inertial>
+        <visual>
+          <origin xyz="${parallel_gripper_mesh_xyz}" rpy="${parallel_gripper_mesh_rpy}"/>
+          <geometry>
+            <mesh filename="${mesh_dir}/clamp_${side}.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+          <material name="charcoal"/>
+        </visual>
+        <collision>
+          <origin xyz="${parallel_gripper_mesh_xyz}" rpy="${parallel_gripper_mesh_rpy}"/>
+          <geometry>
+            <mesh filename="${mesh_dir}/clamp_${side}_collision.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+        </collision>
+      </link>
+
+      <joint name="${side}_finger_joint" type="prismatic">
+        <parent link="gripper_link"/>
+        <child link="${side}_finger_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="${axis}"/>
+        <limit lower="0" upper="${parallel_finger_stroke}"
+               effort="${max_torque_nm / parallel_pinion_radius}" velocity="1e6"/>
+        <mimic joint="gripper_joint" multiplier="${-parallel_pinion_radius}" offset="0"/>
+      </joint>
+    </xacro:macro>
+
+    <!-- Right finger sits on -X at q=0 and opens towards -X; left mirrors it. -->
+    <xacro:finger side="right" axis="-1 0 0" com="-0.00805906 -0.0012937 -0.0741853"
+                  ixy="5.534e-07" ixz="2.271e-07" iyz="1.019e-06"/>
+    <xacro:finger side="left" axis="1 0 0" com="0.00710229 0.00171947 -0.0741827"
+                  ixy="5.536e-07" ixz="-2.353e-07" iyz="-9.783e-07"/>
+  </xacro:macro>
+
+</robot>
