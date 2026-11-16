@@ -58,6 +58,11 @@ def run_interactive(model: str, wrist_camera: bool = True, scene: str = 'flat'):
     estop = EStop(sim.model)
 
     with mujoco.viewer.launch_passive(sim.model, sim.data, key_callback=keys.bootstrap) as viewer:
+        # Group 3 (the "collision" geom class - transparent-red mesh duplicates, self-collision
+        # only) is off by default, but the viewer's number-key group toggles (0-9) are easy to
+        # hit by accident and easy to lose track of - force it off here so restarting the
+        # viewer always gives a clean state regardless of prior keypresses.
+        viewer.opt.geomgroup[3] = 0
         while viewer.is_running():
             step_start = time.time()
             while not keys.events.empty():

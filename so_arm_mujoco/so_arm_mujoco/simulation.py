@@ -55,7 +55,7 @@ def mujoco_share_dir() -> str:
     return _package_dir('so_arm_mujoco', 'SO_ARM_MUJOCO_SHARE', 'mjcf/so_arm.mjcf.xacro')
 
 
-VALID_SCENES = ('flat', 'arena', 'none')
+VALID_SCENES = ('flat', 'arena', 'pickplace', 'none')
 
 
 def build_model_xml(
@@ -74,7 +74,8 @@ def build_model_xml(
 
     `scene` selects one of the named MJCF scenes in mjcf/scenes/ (`flat`: skybox+floor, the
     default; `arena`: flat plus a small graspable-cubes-and-tray tabletop workspace, all within
-    SO101's measured reach - see mjcf/scenes/arena.mjcf.xacro) or `'none'` to omit the
+    SO101's measured reach - see mjcf/scenes/arena.mjcf.xacro; `pickplace`: flat plus four
+    AprilTag-marked cubes on pedestals and a tray, for pick_place.py) or `'none'` to omit the
     free-standing scene entirely, e.g. to compose the arm into an external one instead.
 
     For the defaults (wrist_camera=True, scene='flat', no description_share override), this
@@ -106,6 +107,7 @@ def build_model_xml(
     mappings = {
         'so_arm_config': model,
         'scene': scene,
+        'tag_dir': str(Path(mujoco_dir) / 'textures'),
         'wrist_camera_mjcf': 'true' if wrist_camera else 'false',
     }
     doc = xacro.parse(raw)

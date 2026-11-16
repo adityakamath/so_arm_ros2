@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+<!-- Pick-and-place workspace for pick_place.py: four AprilTag cubes (tag36h11 ids 1-4), each on its own
+     pedestal, and one tray, with a 2x2 grid of tags on its floor, to put them in. Nothing else (arena.mjcf.xacro has the plain coloured
+     cubes; this scene deliberately doesn't).
+
+     Cubes: 4 cm edge, upright, tag on the top face as a visual-only decal (no collision). They sit
+     on a raised platform, which lifts the grasp off the floor. Friction is high (3, with
+     torsional, condim 4), matching the gripper's finger pads.
+
+     Tray: 15 cm square with a low rim, rotated about z to face the arm (its local x is the arm's
+     radial direction at the tray), so a cube held by the jaws lands square to the tray's walls.
+
+     pick_place.py hard-codes the cube/pedestal/tray geometry below - keep them in sync.
+     The tag textures come in as the `tag_dir` xacro arg (an absolute path) because an included
+     file can't use $(find ...) without a sourced ROS workspace. -->
+<mujoco xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <statistic center="0.1 -0.01 0.05" extent="0.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="45" elevation="-20" offwidth="1280" offheight="960"/>
+    <scale frustum="2"/>
+  </visual>
+
+  <xacro:macro name="tag_asset" params="id">
+    <texture type="2d" name="tag${id}" file="$(arg tag_dir)/tag36h11_${id}.png"/>
+    <material name="tag${id}" texture="tag${id}"/>
+  </xacro:macro>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+    <material name="tray" rgba="0.55 0.55 0.58 1"/>
+    <material name="pedestal" rgba="0.35 0.35 0.4 1"/>
+    <xacro:tag_asset id="0"/>
+    <xacro:tag_asset id="1"/>
+    <xacro:tag_asset id="2"/>
+    <xacro:tag_asset id="3"/>
+    <xacro:tag_asset id="4"/>
+    <xacro:tag_asset id="5"/>
+    <xacro:tag_asset id="6"/>
+    <xacro:tag_asset id="7"/>
+    <xacro:tag_asset id="8"/>
+    <xacro:tag_asset id="9"/>
+    <xacro:tag_asset id="10"/>
+  </asset>
+
+  <!-- A 4 cm tagged cube on its own narrow pedestal (3 cm tall, 2.4 cm square), at (x, y). -->
+  <xacro:macro name="platform_cube" params="id x y q">
+    <geom name="pedestal${id}" type="box" size="0.012 0.012 0.015" pos="${x} ${y} 0.015" quat="${q}" material="pedestal"/>
+    <body name="cube${id}" pos="${x} ${y} 0.05" quat="${q}">
+      <freejoint/>
+      <geom type="box" size="0.02 0.02 0.02" rgba="0.9 0.9 0.9 1" density="500"
+            friction="3 0.1 0.01" condim="4"/>
+      <geom type="box" size="0.02 0.02 0.0003" pos="0 0 0.0203" material="tag${id}"
+            contype="0" conaffinity="0"/>
+    </body>
+  </xacro:macro>
+
+  <worldbody>
+    <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+
+    <!-- Floor calibration markers, each 6 cm across (4.8 cm black square), on the -y side of the
+         cubes where the camera sees them clearly and the cubes cast no shadow over them: id 0 is the
+         reference point, 9 and 10 are alignment markers spread over the workspace, so the camera's
+         pose can be solved from all three (one small tag alone fixes a camera's tilt only to a few
+         degrees). Their positions in the world are known. -->
+    <geom type="box" size="0.03 0.03 0.0003" pos="0.30 -0.10 0.0003" material="tag0" contype="0" conaffinity="0"/>
+    <geom type="box" size="0.03 0.03 0.0003" pos="0.30 -0.32 0.0003" material="tag9" contype="0" conaffinity="0"/>
+    <geom type="box" size="0.03 0.03 0.0003" pos="0.12 -0.42 0.0003" material="tag10" contype="0" conaffinity="0"/>
+    <!-- Fixed global camera, high above the workspace and a little toward -y, looking almost straight
+         down. With the arm folded in its rest pose its links hang at 10-25 cm over the base; from a low
+         angle their "shadow" (the floor they hide from the camera) falls on the near cubes, and the
+         steeper the camera the shorter that shadow, so this is high. The pose is calibrated from the floor
+         markers above. 1280x960 so a 3.2 cm tag is ~40 px wide at this height. -->
+    <camera name="global_cam" pos="0.15 -0.12 0.75" xyaxes="1.00000 -0.00000 0.00000 0.00000 0.99961 0.02777" fovy="60" resolution="1280 960"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- Four cubes, each on its own narrow pedestal, so every cube has free space all round it and
+         the jaw tips can reach below its bottom edge. They sit 19.5 cm and 25 cm from the base (where
+         the arm grasps best) at +-16 deg, in deliberately scrambled ID order. The two columns are 16 deg either side of straight ahead: the wrist housing overhangs the fixed-jaw side of the gripper and brushes a neighbouring cube that is too close. -->
+    <xacro:platform_cube id="3" x="0.1874" y="0.0537" q="0.99027 0 0 0.13917"/>
+    <xacro:platform_cube id="1" x="0.2403" y="0.0689" q="0.99027 0 0 0.13917"/>
+    <xacro:platform_cube id="4" x="0.1874" y="-0.0537" q="0.99027 0 0 -0.13917"/>
+    <xacro:platform_cube id="2" x="0.2403" y="-0.0689" q="0.99027 0 0 -0.13917"/>
+
+    <!-- quat: rotation about z by atan2(-0.21, 0.09) = -1.1659 rad, facing the arm base. -->
+    <body name="tray" pos="0.09 -0.21 0" quat="0.834841 0 0 -0.550491">
+      <geom type="box" size="0.075 0.075 0.002" pos="0 0 0.002" material="tray"/>
+      <geom type="box" size="0.075 0.005 0.006" pos="0 0.07 0.006" material="tray"/>
+      <geom type="box" size="0.075 0.005 0.006" pos="0 -0.07 0.006" material="tray"/>
+      <geom type="box" size="0.005 0.075 0.006" pos="0.07 0 0.006" material="tray"/>
+      <geom type="box" size="0.005 0.075 0.006" pos="-0.07 0 0.006" material="tray"/>
+      <!-- Four tags on the tray floor in a 2x2 grid, one under each slot (5-8 in slot order: far
+           row first, left to right as seen from the arm). The overhead camera reads the slot
+           positions straight off them, and a cube set down in a slot covers its tag. -->
+      <geom type="box" size="0.02 0.02 0.0003" pos="0.035 -0.035 0.0043" material="tag5" contype="0" conaffinity="0"/>
+      <geom type="box" size="0.02 0.02 0.0003" pos="0.035 0.035 0.0043" material="tag6" contype="0" conaffinity="0"/>
+      <geom type="box" size="0.02 0.02 0.0003" pos="-0.035 -0.035 0.0043" material="tag7" contype="0" conaffinity="0"/>
+      <geom type="box" size="0.02 0.02 0.0003" pos="-0.035 0.035 0.0043" material="tag8" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>

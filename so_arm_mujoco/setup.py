@@ -14,6 +14,7 @@ setup(
         ('share/' + package_name + '/mjcf', glob('mjcf/*.xacro') + glob('mjcf/*.xml')),
         ('share/' + package_name + '/mjcf/scenes', glob('mjcf/scenes/*.xacro')),
         ('share/' + package_name + '/config', glob('config/*.yaml')),
+        ('share/' + package_name + '/textures', glob('textures/*.png')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -35,6 +36,7 @@ setup(
             'build_mujoco_models = so_arm_mujoco.cli:build_main',
             'teleop_ik = so_arm_mujoco.teleop_ik:teleop_main',
             'benchmark_mujoco = so_arm_mujoco.benchmark_mujoco:main',
+            'pick_place = so_arm_mujoco.pick_place:main',
         ],
     },
 )

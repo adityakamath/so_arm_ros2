@@ -4,9 +4,12 @@
      Usage: xacro so_arm.mjcf.xacro so_arm_config:=so101 > /tmp/so_arm.xml -->
 <mujoco xmlns:xacro="http://www.ros.org/wiki/xacro" model="so_arm">
   <xacro:arg name="so_arm_config" default="so101"/>
-  <!-- flat (skybox+floor, the default), arena (flat + graspable cubes/tray, see
-       mjcf/scenes/), or none (omit entirely, e.g. to compose into an external scene). -->
+  <!-- flat (skybox+floor, the default), arena (flat + graspable cubes/tray), pickplace
+       (flat + four AprilTag cubes on pedestals and a tray, for pick_place.py; see mjcf/scenes/), or none (omit entirely, e.g. to compose into an external scene). -->
   <xacro:arg name="scene" default="flat"/>
+  <!-- Absolute path of the AprilTag texture folder, for the pickplace scene (an included file
+       can't use $(find) without ROS) - build_model_xml fills it in. -->
+  <xacro:arg name="tag_dir" default=""/>
   <!-- so101 only; mirrors urdf's wrist_camera_urdf arg. False omits the camera bodies below. -->
   <xacro:arg name="wrist_camera_mjcf" default="true"/>
   <xacro:property name="so_arm_config" value="$(arg so_arm_config)"/>
@@ -336,10 +339,26 @@
       <exclude body1="lower_arm_link" body2="wrist_link"/>
       <exclude body1="wrist_link" body2="gripper_link"/>
       <exclude body1="gripper_link" body2="moving_jaw_link"/>
+      <!-- The convex collision hulls of these non-adjacent links overlap by ~25 mm in the folded rest pose
+           (shoulder_lift ~ -1.7, elbow_flex ~ -1.65), where the real parts clear each other. -->
+      <exclude body1="shoulder_link" body2="lower_arm_link"/>
+      <exclude body1="shoulder_link" body2="wrist_link"/>
+      <exclude body1="upper_arm_link" body2="wrist_link"/>
+      <exclude body1="shoulder_link" body2="gripper_link"/>
+        <exclude body1="shoulder_link" body2="moving_jaw_link"/>
       <xacro:if value="${'$(arg wrist_camera_mjcf)' == 'true'}">
         <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
         <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
         <exclude body1="gripper_link" body2="wrist_camera_body_link"/>
+        <!-- The camera hulls also snag on the arm links when the arm is folded (rest pose). -->
+        <exclude body1="shoulder_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="shoulder_link" body2="wrist_camera_body_link"/>
+        <exclude body1="upper_arm_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="upper_arm_link" body2="wrist_camera_body_link"/>
+        <exclude body1="lower_arm_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="lower_arm_link" body2="wrist_camera_body_link"/>
+        <exclude body1="wrist_link" body2="wrist_camera_mount_link"/>
+        <exclude body1="wrist_link" body2="wrist_camera_body_link"/>
       </xacro:if>
     </contact>
     <worldbody>
@@ -354,5 +373,8 @@
   </xacro:if>
   <xacro:if value="${'$(arg scene)' == 'arena'}">
     <xacro:include filename="$(find so_arm_mujoco)/mjcf/scenes/arena.mjcf.xacro"/>
+  </xacro:if>
+  <xacro:if value="${'$(arg scene)' == 'pickplace'}">
+    <xacro:include filename="$(find so_arm_mujoco)/mjcf/scenes/pickplace.mjcf.xacro"/>
   </xacro:if>
 </mujoco>

@@ -76,9 +76,25 @@
     <exclude body1="lower_arm_link" body2="wrist_link"/>
     <exclude body1="wrist_link" body2="gripper_link"/>
     <exclude body1="gripper_link" body2="moving_jaw_link"/>
+    <!-- The convex collision hulls of these non-adjacent links overlap by ~25 mm in the folded rest pose
+           (shoulder_lift ~ -1.7, elbow_flex ~ -1.65), where the real parts clear each other. -->
+    <exclude body1="shoulder_link" body2="lower_arm_link"/>
+    <exclude body1="shoulder_link" body2="wrist_link"/>
+    <exclude body1="upper_arm_link" body2="wrist_link"/>
+    <exclude body1="shoulder_link" body2="gripper_link"/>
+    <exclude body1="shoulder_link" body2="moving_jaw_link"/>
     <exclude body1="gripper_link" body2="wrist_camera_mount_link"/>
     <exclude body1="wrist_camera_mount_link" body2="wrist_camera_body_link"/>
     <exclude body1="gripper_link" body2="wrist_camera_body_link"/>
+    <!-- The camera hulls also snag on the arm links when the arm is folded (rest pose). -->
+    <exclude body1="shoulder_link" body2="wrist_camera_mount_link"/>
+    <exclude body1="shoulder_link" body2="wrist_camera_body_link"/>
+    <exclude body1="upper_arm_link" body2="wrist_camera_mount_link"/>
+    <exclude body1="upper_arm_link" body2="wrist_camera_body_link"/>
+    <exclude body1="lower_arm_link" body2="wrist_camera_mount_link"/>
+    <exclude body1="lower_arm_link" body2="wrist_camera_body_link"/>
+    <exclude body1="wrist_link" body2="wrist_camera_mount_link"/>
+    <exclude body1="wrist_link" body2="wrist_camera_body_link"/>
   </contact>
   <worldbody>
     <body name="base_link">

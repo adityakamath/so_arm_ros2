@@ -38,7 +38,9 @@ TELEOP_ATTACHED_MESSAGE = (
 )
 
 
-def _build_teleop_model(model_name: str, scene: str = 'flat') -> mujoco.MjModel:
+def _build_teleop_model(
+    model_name: str, scene: str = 'flat', customize=None,
+) -> mujoco.MjModel:
     """so_arm model + a mocap tracker sphere, connected to the end effector by a MuJoCo
     equality constraint (MuJoCo's own solver drives the arm toward it - no IK code here).
     scene='arena' is the natural pairing here: graspable cubes and a tray within reach, to
@@ -68,6 +70,8 @@ def _build_teleop_model(model_name: str, scene: str = 'flat') -> mujoco.MjModel:
         type=mujoco.mjtEq.mjEQ_CONNECT, objtype=mujoco.mjtObj.mjOBJ_SITE,
         name1='end_effector_link', name2='tracker_site', solref=[0.02, 1],
     )
+    if customize:
+        customize(spec)  # e.g. pick_place.py adds its tagged target cube
     return spec.compile()
 
 
@@ -186,6 +190,11 @@ def run(model_name: str, scene: str = 'flat'):
     frame_dt = steps_per_frame * model.opt.timestep
 
     with mujoco.viewer.launch_passive(model, sim.data, key_callback=keys.bootstrap) as viewer:
+        # Group 3 (the "collision" geom class - transparent-red mesh duplicates, self-collision
+        # only) is off by default, but the viewer's number-key group toggles (0-9) are easy to
+        # hit by accident and easy to lose track of - force it off here so restarting the
+        # viewer always gives a clean state regardless of prior keypresses.
+        viewer.opt.geomgroup[3] = 0
         while viewer.is_running():
             frame_start = time.time()
             while not keys.events.empty():
