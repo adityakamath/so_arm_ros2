@@ -1,16 +1,51 @@
-# The URDF sets velocity="1e6" on every joint (see so101.urdf.xacro), so MoveIt needs real
-# limits here or time parameterization produces near-instant trajectories.
+# MoveIt's velocity/acceleration limits. Position limits are not repeated here - MoveIt reads
+# them from the URDF. The URDF's own <limit velocity> is a deliberate 1e6 placeholder and its
+# ros2_control max_velocity is the 100 rad/s protocol ceiling (the servo firmware sets the real
+# cap), so neither is usable for planning; these come from the repo's MuJoCo motor model instead.
+#
+# max_velocity: 8.07 rad/s = forcerange / damping of so_arm_mujoco's sts3215.mjcf.xacro
+#   (8.537717 / 1.057835) - the speed at which the identified STS3215 12 V model saturates,
+#   which matches the motor's no-load spec.
+# max_acceleration: per joint, (effort - gravity torque - friction loss) / the joint's diagonal
+#   mass-matrix entry, taken as the 5th percentile over 3000 random poses within the joint
+#   limits of so_arm_mujoco's so101 model, using the URDF's effort (max_torque_nm = 2.942 N*m,
+#   the STS3215 datasheet figure) rather than MuJoCo's identified 8.54 N*m, to stay
+#   conservative. Rounded down. The shoulder joints carry the most inertia, so they get the least.
+# Recompute if the MuJoCo identification or the URDF effort changes.
+#
+# These are the robot's limits; the scaling factors below are what planning actually uses
+# (0.3 -> about 2.4 rad/s). Raise them in the MotionPlanning panel or per request.
 default_velocity_scaling_factor: 0.3
 default_acceleration_scaling_factor: 0.3
 
 joint_limits:
-  shoulder_pan_joint: &arm_joint
+  shoulder_pan_joint:
     has_velocity_limits: true
-    max_velocity: 2.0
+    max_velocity: 8.07
     has_acceleration_limits: true
-    max_acceleration: 4.0
-  shoulder_lift_joint: *arm_joint
-  elbow_flex_joint: *arm_joint
-  wrist_flex_joint: *arm_joint
-  wrist_roll_joint: *arm_joint
-  gripper_joint: *arm_joint
+    max_acceleration: 48.0
+  shoulder_lift_joint:
+    has_velocity_limits: true
+    max_velocity: 8.07
+    has_acceleration_limits: true
+    max_acceleration: 36.0
+  elbow_flex_joint:
+    has_velocity_limits: true
+    max_velocity: 8.07
+    has_acceleration_limits: true
+    max_acceleration: 56.0
+  wrist_flex_joint:
+    has_velocity_limits: true
+    max_velocity: 8.07
+    has_acceleration_limits: true
+    max_acceleration: 78.0
+  wrist_roll_joint:
+    has_velocity_limits: true
+    max_velocity: 8.07
+    has_acceleration_limits: true
+    max_acceleration: 84.0
+  gripper_joint:
+    has_velocity_limits: true
+    max_velocity: 8.07
+    has_acceleration_limits: true
+    max_acceleration: 84.0

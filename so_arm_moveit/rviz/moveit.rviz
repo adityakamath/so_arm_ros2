@@ -12,22 +12,45 @@ Visualization Manager:
     - Class: moveit_rviz_plugin/MotionPlanning
       Name: MotionPlanning
       Enabled: true
+      # The panel's own boxes - without these RViz starts at 0.1 (the launch's joint_limits.yaml
+      # default of 0.3 only applies to requests that send 0).
+      Velocity_Scaling_Factor: 0.3
+      Acceleration_Scaling_Factor: 0.3
+      MoveIt_Planning_Time: 5
+      MoveIt_Planning_Attempts: 10
+      MoveIt_Use_Cartesian_Path: false
+      MoveIt_Use_Constraint_Aware_IK: false
+      MoveIt_Allow_Approximate_IK: false
+      MoveIt_Allow_External_Program: false
+      MoveIt_Allow_Replanning: false
+      MoveIt_Allow_Sensor_Positioning: false
       Planning Request:
         Planning Group: manipulator
+        # The draggable end-effector marker lives on the goal state; an explicit size (0 = auto)
+        # keeps it visible next to this small arm.
+        Query Goal State: true
+        Query Start State: false
+        Interactive Marker Size: 0.15
+        Goal State Alpha: 0.6
+      Scene Robot:
+        Robot Alpha: 0.5
+        Show Robot Visual: true
+  # Interact first so it is the tool selected on start: it drags the marker and still orbits/zooms
+  # the camera everywhere else.
   Tools:
-    - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
     - Class: rviz_default_plugins/Select
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
       Name: Current View
       Target Frame: base_link
-      Distance: 1.0
+      Distance: 1.4
       Focal Point:
-        X: 0
+        X: 0.1
         Y: 0
-        Z: 0.1
+        Z: 0.15
       Pitch: 0.5
       Yaw: 0.8
     Saved: ~

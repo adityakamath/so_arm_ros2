@@ -31,7 +31,9 @@ jobs:
         ros_distro: [kilted, jazzy, lyrical]
     runs-on: ubuntu-latest
     container: ros:${{ matrix.ros_distro }}
-    timeout-minutes: 15
+    # The MoveIt launch tests each bring up control + move_group (about a minute apiece), on
+    # top of the existing launch tests.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,11 +63,18 @@ jobs:
             ros-${{ matrix.ros_distro }}-joy-teleop \
             ros-${{ matrix.ros_distro }}-launch-testing \
             ros-${{ matrix.ros_distro }}-launch-testing-ros \
+            ros-${{ matrix.ros_distro }}-moveit-kinematics \
+            ros-${{ matrix.ros_distro }}-moveit-msgs \
+            ros-${{ matrix.ros_distro }}-moveit-planners-ompl \
+            ros-${{ matrix.ros_distro }}-moveit-ros-move-group \
+            ros-${{ matrix.ros_distro }}-moveit-servo \
+            ros-${{ matrix.ros_distro }}-moveit-simple-controller-manager \
             ros-${{ matrix.ros_distro }}-parallel-gripper-controller \
             ros-${{ matrix.ros_distro }}-pinocchio \
             ros-${{ matrix.ros_distro }}-pluginlib \
             ros-${{ matrix.ros_distro }}-rclcpp-lifecycle \
             ros-${{ matrix.ros_distro }}-robot-state-publisher \
+            ros-${{ matrix.ros_distro }}-ros2controlcli \
             ros-${{ matrix.ros_distro }}-ros2-control \
             ros-${{ matrix.ros_distro }}-ros2-controllers \
             ros-${{ matrix.ros_distro }}-rosidl-default-generators \
@@ -141,13 +150,22 @@ jobs:
           pytest test_urdf_xacro.py
 
       - name: pytest (so_arm_moveit)
-        # The launch file's helpers only; MoveIt itself isn't installed in this image, and
-        # nothing here needs it (the package is config + one launch file, no compiled code).
+        # The launch file's helpers, plus launch_testing tests that run the real stack (control on
+        # the mock STS hardware + move_group, MoveIt installed above) and plan/execute through
+        # /move_action: mode switching, joint goals, named states, a namespaced stack, Servo jog.
+        # One pytest invocation per file, like the steps above: each launch test owns the ROS
+        # graph while it runs.
         run: |
           . /opt/ros/${{ matrix.ros_distro }}/setup.sh
           . install/setup.sh
           cd src/so_arm_ros2/so_arm_moveit/test
-          pytest test_launch_helpers.py
+          FAILED=0
+          for f in test_*.py; do
+            echo "::group::pytest $f"
+            pytest "$f" || FAILED=1
+            echo "::endgroup::"
+          done
+          exit $FAILED
 
       - name: pytest (so_arm_mujoco)
         # mujoco/gymnasium pull their own numpy - installed last (--user, --ignore-installed,

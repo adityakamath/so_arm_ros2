@@ -114,6 +114,25 @@ def launch_setup(context):
     root = f'{frame_prefix}base_link'
     rviz_cfg['Visualization Manager']['Global Options']['Fixed Frame'] = root
     rviz_cfg['Visualization Manager']['Views']['Current']['Target Frame'] = root
+    # MoveIt's RViz plugin builds every move_group service/action name (and its interactive
+    # marker topic) as append(<Move Group Namespace>, name), and an empty namespace gives an
+    # absolute "/name" - so running the RViz node inside /ns is not enough: the panel would look
+    # for /move_action and /query_planner_interface and find no planner list. Setting the
+    # property makes it use /ns/... The node itself stays in /ns because the plugin's other
+    # names are relative (e.g. its planning_scene publisher) and only land on /ns/... from there.
+    # tf needs nothing: it is the global /tf, and arms are told apart by the frame prefix.
+    ns = namespace.strip().strip('/')
+    if ns:
+        for display in rviz_cfg['Visualization Manager']['Displays']:
+            if display.get('Class') == 'moveit_rviz_plugin/MotionPlanning':
+                display['Move Group Namespace'] = f'/{ns}'
+                # Two more topic properties default to absolute names (/monitored_planning_scene,
+                # /display_planned_path): without these RViz never sees the arm's state change,
+                # so its model stays frozen while the arm actually moves, and planned paths are
+                # never animated.
+                display['Planning Scene Topic'] = f'/{ns}/monitored_planning_scene'
+                display.setdefault('Planned Path', {})['Trajectory Topic'] = (
+                    f'/{ns}/display_planned_path')
     with tempfile.NamedTemporaryFile(
             'w', suffix='.rviz', prefix='so_arm_moveit_', delete=False) as f:
         yaml.safe_dump(rviz_cfg, f)
@@ -175,15 +194,20 @@ def launch_setup(context):
             return ['ros2', 'control', 'switch_controllers', '-c', manager, '--best-effort',
                     '--activate', *on, '--deactivate', *sorted(motion - set(on))]
 
-        def switch_to(target, attempts=3):
-            # Retried: a failed switch on the way out would leave teleop's controller inactive.
+        def switch_to(target, attempts=3, timeout=20):
+            # Retried on failure: a failed switch on the way out would leave teleop's controller
+            # inactive. Not retried on a timeout: the CLI waits forever for a controller manager
+            # that is gone (e.g. everything being shut down together), so a hang means there is
+            # nothing left to switch and retrying would only stall the shutdown.
             for _ in range(attempts):
                 try:
                     if subprocess.run(switch_cmd(target), capture_output=True,
-                                      timeout=30).returncode == 0:
+                                      timeout=timeout).returncode == 0:
                         return
                 except subprocess.TimeoutExpired:
-                    pass
+                    print(f'[so_arm_moveit] controller manager unreachable; '
+                          f'not switching controllers to "{target}"')
+                    return
                 time.sleep(2)
             print(f'[so_arm_moveit] WARNING: could not switch controllers to "{target}"')
 

@@ -15,7 +15,7 @@ import itertools
 import time
 import unittest
 
-from controller_manager_msgs.srv import ListControllers
+from _launch_helpers import controller_states as _controller_states
 import launch
 import launch.actions
 import launch.substitutions
@@ -121,23 +121,26 @@ class TestControlStackComesUp(unittest.TestCase):
         self.assertIsNotNone(msg, '/joint_states never published')
         self.assertTrue(set(_JOINT_NAMES) <= set(msg.name))
 
-    def test_both_controllers_become_active(self):
-        service = '/controller_manager/list_controllers'
-        client = self._node.create_client(ListControllers, service)
-        self.assertTrue(client.wait_for_service(timeout_sec=30.0))
-        expected = {'joint_state_broadcaster', 'state_interfaces_broadcaster', 'so_arm_controller'}
-        deadline = time.monotonic() + 30.0
-        active = set()
-        while time.monotonic() < deadline:
-            future = client.call_async(ListControllers.Request())
-            rclpy.spin_until_future_complete(self._node, future, timeout_sec=5.0)
-            result = future.result()
-            if result is not None:
-                active = {c.name for c in result.controller if c.state == 'active'}
-                if expected <= active:
-                    break
-            time.sleep(0.5)
-        self.assertTrue(expected <= active, f'not all controllers active: {active}')
+    def test_teleop_mode_controllers_become_active(self):
+        """The default (teleop) mode: so_arm_controller drives all six joints for the bridge."""
+        want = {
+            'joint_state_broadcaster': 'active', 'state_interfaces_broadcaster': 'active',
+            'so_arm_controller': 'active',
+        }
+        states = _controller_states(self._node, want=want)
+        for name, state in want.items():
+            self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
+
+    def test_moveit_mode_controllers_are_loaded_but_inactive(self):
+        """They command the same joints as so_arm_controller, so they must not be active in the
+        default mode - that is what keeps teleop, record/replay and the bridge unaffected."""
+        want = {
+            'arm_trajectory_controller': 'inactive', 'forward_position_controller': 'inactive',
+            'gripper_controller': 'inactive',
+        }
+        states = _controller_states(self._node, want=want)
+        for name, state in want.items():
+            self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 
 
 class TestJointTrajectoryBridgeIntegration(unittest.TestCase):

@@ -84,7 +84,10 @@ SO101 only, and only with `wrist_camera_urdf:=true` (the URDF mount must exist f
 ## Tests
 
 ```bash
-pytest test -q
+cd so_arm_bringup/test
+for f in test_*.py; do pytest "$f" -q; done      # one file at a time, as CI does (the camera tests pull in cv2's numpy)
 ```
 
-Covers the bag recorder/player round trip, the camera node's graceful no-device handling, and that both launch files' arguments and yaml configs are consistent.
+Unit and config tests cover the bag recorder/player round trip, the camera node's graceful no-device handling, the leader-follower wiring, and that every launch file's arguments (including `namespace`) and yaml configs are consistent.
+
+`launch_testing` integration tests start the real stack on the mock STS hardware (`use_mock:=true`): `test_so_arm_launch.py` for the composed stack and the record/replay round trip, and `test_so_arm_namespace_launch.py`, which launches `so_arm.launch.py namespace:=arm1` and checks the nodes sit under `/arm1` exactly once (a regression guard for the doubled `/arm1/arm1` bug), the controllers and joint states are there, and every published TF frame carries the `arm1/` prefix. They need `pytest<8` for the `launch_testing` plugin (see `requirements-dev.txt`).

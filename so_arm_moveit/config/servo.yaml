@@ -16,8 +16,12 @@ smoothing_filter_plugin_name: "online_signal_smoothing::AccelerationLimitedPlugi
 is_primary_planning_scene_monitor: true
 check_octomap_collisions: false
 move_group_name: manipulator
-# 5-DOF arm: the 6D Jacobian is rank-deficient, so the conditioning is far worse than a 6/7-DOF
-# arm's and MoveIt's defaults (10/30) would stop it almost immediately. Starting values - tune.
+# Only joint jog (~/delta_joint_cmds) works on this 5-DOF arm. Servo's Cartesian twist and pose
+# commands halt with "Very close to a singularity" regardless of these values: MoveIt's
+# velocityScalingFactorForSingularity indexes the SVD with the 6-element twist size, which is
+# out of bounds for a 5-joint group (unfixed in moveit2 main as of this writing). The measured
+# Jacobian condition number here is ~20-40 in the working envelope (median 39 over the limits),
+# so these are just sane values for if/when that is fixed upstream.
 lower_singularity_threshold: 100.0
 hard_stop_singularity_threshold: 300.0
 leaving_singularity_threshold_multiplier: 2.0

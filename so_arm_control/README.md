@@ -108,7 +108,12 @@ While e-stopped, `teleop_ik_node` tracks the arm's live pose as its target inste
 ## Tests
 
 ```bash
-pytest test -q
+cd so_arm_control/test
+for f in test_*.py; do pytest "$f" -q; done      # one file at a time, as CI does
 ```
 
-Covers the collision-checked bridge and self-collision checker (FCL), the IK solver and motion limits, the toggle and mode-color logic, the launch files' arguments, and that the yaml configs agree with each other (joint names, topics).
+One file per invocation, because pinocchio (the IK solver) and python-fcl (the self-collision checker) need incompatible numpy ABIs and can't share a process.
+
+Unit and config tests cover the collision-checked bridge and self-collision checker (FCL), the IK solver and motion limits, the toggle and mode-color logic, the launch files' arguments (including `namespace` and `controller_mode`), the `namespace` helpers, and that the yaml configs agree with each other (joint names, topics, and that every controller mode names declared, non-conflicting controllers).
+
+`launch_testing` integration tests (`test_control_launch.py`, `test_teleop_launch.py`, `test_controller_mode_moveit_launch.py`, `test_controller_mode_servo_launch.py`) start the real stack on the mock STS hardware (`use_mock:=true`, so `sts_hardware_interface` must be built) and check, among other things, which controllers are active in each [controller mode](#controller-modes), and that the MoveIt-mode controllers are loaded but inactive in the default one. They need `pytest<8` for the `launch_testing` plugin (see `requirements-dev.txt`).

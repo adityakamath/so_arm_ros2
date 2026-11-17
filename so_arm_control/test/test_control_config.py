@@ -227,7 +227,7 @@ class TestTeleopYaml:
 class TestControlLaunchArgs:
     EXPECTED_ARGS = [
         'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
-        'mujoco_headless', 'frame_prefix',
+        'mujoco_headless', 'frame_prefix', 'namespace', 'controller_mode', 'wrist_camera_urdf',
     ]
 
     def test_expected_args_declared(self):
@@ -242,7 +242,7 @@ class TestControlLaunchArgs:
 
 
 class TestTeleopLaunchArgs:
-    EXPECTED_ARGS = ['frame_prefix']
+    EXPECTED_ARGS = ['frame_prefix', 'namespace']
 
     def test_expected_args_declared(self):
         """teleop.launch.py loads teleop.yaml directly, plus this leader-follower override arg -

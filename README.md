@@ -48,12 +48,13 @@ to `/etc/udev/rules.d/`, then `sudo udevadm control --reload-rules && sudo udeva
 
 ## Installation
 
-Requires [ROS 2](https://docs.ros.org/en/kilted/) (CI-tested on Kilted and Jazzy) with:
+Requires [ROS 2](https://docs.ros.org/en/kilted/) (CI-tested on Kilted, Jazzy and Lyrical) with:
 
 - [`ros2_control`](https://control.ros.org/) and `ros2_controllers` (`joint_state_broadcaster`, `joint_trajectory_controller`)
 - [Pinocchio](https://github.com/stack-of-tasks/pinocchio) (`sudo apt install ros-kilted-pinocchio`)
 - [`joy`](https://github.com/ros-drivers/joystick_drivers) and [`joy_teleop`](https://index.ros.org/p/joy_teleop/)
 - [rosbag2](https://github.com/ros2/rosbag2) with the mcap storage plugin (`ros-kilted-rosbag2-storage-mcap`), for teach-and-repeat
+- Optional, only for [`so_arm_moveit`](so_arm_moveit/README.md): [MoveIt 2](https://moveit.ai) (`ros-<distro>-moveit-ros-move-group`, `-moveit-kinematics`, `-moveit-planners-ompl`, `-moveit-simple-controller-manager`, plus `-moveit-servo` for Servo) and `ros-<distro>-ros2controlcli`, which its launch file uses to switch controller modes
 
 Clone and build:
 
@@ -173,6 +174,14 @@ MoveIt needs different controllers than teleop (an arm-only trajectory controlle
 ## Leader-follower (dual arm)
 
 `so_arm_bringup leader_follower.launch.py` runs two arms: the leader under `/leader` with full control and teleop, the follower under `/follower` tracking the leader's realized joint states live. Teach-and-repeat records from the leader; replaying it drives the follower (not the leader) instead, so a recorded demonstration can be played back on a second arm. See [`so_arm_bringup`'s README](so_arm_bringup/README.md#how-it-works) for how the namespacing and topic redirection work.
+
+## Tests
+
+CI (`.github/workflows/ci.yml`) runs `ruff` and then every package's tests inside the `ros:<distro>` containers for **Kilted, Jazzy and Lyrical**. Besides unit and config tests, there are `launch_testing` integration tests that bring up the real stack on the mock STS hardware (`use_mock:=true`): the control stack in each [controller mode](so_arm_control/README.md#controller-modes), the composed `so_arm.launch.py` with and without a `namespace`, and `so_arm_moveit` end to end - mode switching, joint and named-state goals through `/move_action`, a namespaced stack, and Servo joint jog. The MoveIt tests skip themselves when MoveIt isn't installed.
+
+Each package's README has the exact commands. Two things to know when running them yourself:
+- Run one test file per `pytest` invocation (as CI does): pinocchio and python-fcl need incompatible numpy ABIs, and each launch test owns the ROS graph while it runs.
+- The `launch_testing` pytest plugin needs `pytest<8` (see `requirements-dev.txt`); with a newer pytest the launch tests fail to load.
 
 ## License
 

@@ -104,13 +104,40 @@ class TestLeaderOverrideYamls:
 
 # ── launch argument surface ───────────────────────────────────────────────────
 
+class TestSoArmLaunchArgs:
+    EXPECTED_ARGS = [
+        'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
+        'mujoco_headless', 'frame_prefix', 'namespace', 'wrist_camera', 'wrist_camera_urdf',
+        'replay_loops',
+    ]
+
+    def test_expected_args_declared(self):
+        output = _show_arguments('so_arm_bringup', 'so_arm.launch.py')
+        for arg in self.EXPECTED_ARGS:
+            assert arg in output, f"Expected argument '{arg}' not in so_arm.launch.py"
+
+    def test_model_choices_restricted_to_supported_arms(self):
+        output = _show_arguments('so_arm_bringup', 'so_arm.launch.py')
+        assert 'so100' in output
+        assert 'so101' in output
+
+
 class TestRecordReplayLaunchArgs:
     EXPECTED_ARGS = [
         'recordings_dir', 'record_replay_output_topic',
-        'record_replay_estop_status_topic', 'replay_loops',
+        'record_replay_estop_status_topic', 'replay_loops', 'namespace',
     ]
 
     def test_expected_args_declared(self):
         output = _show_arguments('so_arm_bringup', 'record_replay.launch.py')
         for arg in self.EXPECTED_ARGS:
             assert arg in output, f"Expected argument '{arg}' not in record_replay.launch.py"
+
+
+class TestWristCameraLaunchArgs:
+    EXPECTED_ARGS = ['index_or_path', 'camera_info_url', 'namespace']
+
+    def test_expected_args_declared(self):
+        output = _show_arguments('so_arm_bringup', 'wrist_camera.launch.py')
+        for arg in self.EXPECTED_ARGS:
+            assert arg in output, f"Expected argument '{arg}' not in wrist_camera.launch.py"
