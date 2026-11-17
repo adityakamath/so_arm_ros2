@@ -17,6 +17,7 @@ from _moveit_support import (
     ARM_JOINTS, description, make_node, require_moveit, wait_for_controllers,
 )
 from control_msgs.msg import JointJog
+from moveit_msgs.srv import ServoCommandType
 import pytest
 import rclpy
 from sensor_msgs.msg import JointState
@@ -68,6 +69,15 @@ class TestServoStack(unittest.TestCase):
                 and time.monotonic() < deadline:
             rclpy.spin_once(self._node, timeout_sec=0.2)
         self.assertGreater(jog.get_subscription_count(), 0, 'servo_node never started')
+
+        # The apt Servo (Kilted, Jazzy) drops jog input until a command type is set; newer builds
+        # infer it. Setting it explicitly works for both.
+        switch = self._node.create_client(ServoCommandType, '/servo_node/switch_command_type')
+        self.assertTrue(switch.wait_for_service(timeout_sec=30.0), 'no switch_command_type')
+        request = ServoCommandType.Request(command_type=ServoCommandType.Request.JOINT_JOG)
+        future = switch.call_async(request)
+        rclpy.spin_until_future_complete(self._node, future, timeout_sec=10.0)
+        self.assertTrue(future.result() and future.result().success, 'could not set JOINT_JOG')
 
         # Servo's loop only starts once it sees a joint state *change* after it is up, and there is
         # no reliable "running" signal (/servo_node/status is published earlier). So keep jogging
