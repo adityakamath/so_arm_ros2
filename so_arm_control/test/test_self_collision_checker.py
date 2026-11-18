@@ -44,6 +44,37 @@ class TestConstruction:
         assert _pair_in(checker.checked_pairs, 'base_link', 'upper_arm_link')
 
 
+class TestMeshScale:
+    """The camera mount STL is in millimetres and the URDF scales it by 0.001. The checker used
+    to ignore <mesh scale>, which modelled the mount ~1000x too large and nowhere near the arm,
+    so it never collided with anything."""
+
+    def test_mount_is_modelled_at_its_real_size(self, checker):
+        radius = checker._link_bounds['wrist_camera_mount_link'][1]
+        assert radius < 0.1, f'camera mount bounding radius {radius} m - mesh scale ignored?'
+
+    # Configurations found by sweeping random joint values within limits: the only contact is
+    # the camera mount touching the named link. The old checker reported none of these.
+    @pytest.mark.parametrize('other, joints', [
+        ('base_link', {
+            'shoulder_pan_joint': -1.02, 'shoulder_lift_joint': -0.94, 'elbow_flex_joint': -0.95,
+            'wrist_flex_joint': -0.13, 'wrist_roll_joint': -1.13, 'gripper_joint': -1.7}),
+        ('shoulder_link', {
+            'shoulder_pan_joint': 0.89, 'shoulder_lift_joint': 0.29, 'elbow_flex_joint': -1.22,
+            'wrist_flex_joint': -0.87, 'wrist_roll_joint': -0.92, 'gripper_joint': 0.1}),
+        ('upper_arm_link', {
+            'shoulder_pan_joint': -0.36, 'shoulder_lift_joint': 1.29, 'elbow_flex_joint': -0.88,
+            'wrist_flex_joint': -1.31, 'wrist_roll_joint': -1.67, 'gripper_joint': -0.57}),
+    ])
+    def test_mount_collision_is_detected(self, checker, other, joints):
+        collisions = checker.check(joints)
+        assert len(collisions) == 1 and _pair_in(
+            collisions, other, 'wrist_camera_mount_link'), collisions
+
+    def test_mount_clear_at_zero_pose(self, checker):
+        assert checker.check({}) == []
+
+
 class TestJointsBetween:
 
     def test_two_joint_separation(self, checker):

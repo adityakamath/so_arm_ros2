@@ -70,14 +70,19 @@ class SelfCollisionChecker:
         self._request = fcl.CollisionRequest(enable_contact=True)
         root = ElementTree.fromstring(urdf_xml)
 
-        self._link_meshes: dict[str, list] = {}  # link -> [(mesh_path, xyz, rpy), ...]
+        self._link_meshes: dict[str, list] = {}  # link -> [(mesh_path, xyz, rpy, scale), ...]
         for link in root.findall('link'):
             meshes = []
             for coll in link.findall('collision'):
                 xyz, rpy = _origin_xyz_rpy(coll.find('origin'))
                 mesh_el = coll.find('geometry/mesh')
                 if mesh_el is not None:
-                    meshes.append((_resolve_package_uri(mesh_el.get('filename')), xyz, rpy))
+                    # <mesh scale> is optional; some STLs (the camera mount) are in millimetres.
+                    scale = np.array([float(s) for s in mesh_el.get('scale', '1 1 1').split()])
+                    meshes.append((
+                        _resolve_package_uri(mesh_el.get('filename')), xyz, rpy,
+                        np.broadcast_to(scale, 3),
+                    ))
             if meshes:
                 self._link_meshes[link.get('name')] = meshes
 
@@ -124,9 +129,9 @@ class SelfCollisionChecker:
             model = fcl.BVHModel()
             model.beginModel()
             all_verts = []
-            for mesh_path, xyz, rpy in meshes:
+            for mesh_path, xyz, rpy, scale in meshes:
                 R, t = rpy_to_R(*rpy), np.array(xyz)
-                verts = stlmesh.Mesh.from_file(mesh_path).vectors.reshape(-1, 3) @ R.T + t
+                verts = stlmesh.Mesh.from_file(mesh_path).vectors.reshape(-1, 3) * scale @ R.T + t
                 for i in range(0, len(verts), 3):
                     model.addTriangle(verts[i], verts[i + 1], verts[i + 2])
                 all_verts.append(verts)
