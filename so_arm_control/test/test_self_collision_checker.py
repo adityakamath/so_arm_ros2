@@ -8,8 +8,7 @@ on disk).
 The elbow_flex_joint self-collision case below is a REAL collision on the real robot at its
 own joint limit (shoulder_link intersects lower_arm_link near elbow_flex_joint's lower bound)
 - found by sweeping every checked joint's own range in isolation before writing this test, not
-constructed synthetically. See so_arm_roadmap.md's Homing/safe rest pose item for the safety
-implication of an unclamped path through this pose.
+constructed synthetically. An unclamped path through this pose is a real self-collision.
 """
 
 import pytest

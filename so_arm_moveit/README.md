@@ -1,6 +1,6 @@
 # SO-ARM MoveIt
 
-[MoveIt 2](https://moveit.ai) motion planning for the SO-ARM100 and SO-ARM101. This package is configuration and a launch file only - there is no code to build. It plans against the arm's `joint_states` and executes through [`so_arm_control`](../so_arm_control/README.md)'s existing `so_arm_controller`, so nothing in the control stack changes to use it.
+[MoveIt 2](https://moveit.ai) motion planning for the SO-ARM100 and SO-ARM101. This package is configuration and a launch file only - there is no code to build. It plans against the arm's `joint_states` and executes through the MoveIt-mode controllers of [`so_arm_control`](../so_arm_control/README.md) (an arm-only trajectory controller and the gripper action controller; see [Controller modes](#controller-modes---automatic)), so the control stack runs unchanged, and without MoveIt installed, when you don't use it.
 
 Modeled on the [ROS Physical AI SIG's `ros2_so_arm`](https://github.com/ros-physical-ai/ros2_so_arm) MoveIt config (SO100 only there; this covers both models).
 
@@ -42,7 +42,7 @@ ros2 launch so_arm_moveit move_group.launch.py servo:=true
 
 `servo:=true` runs Servo in `servo` mode instead: `forward_position_controller` streams positions to the arm, and planned execution is off (its controller is inactive). Send joint jog commands (`control_msgs/JointJog`) to `/servo_node/delta_joint_cmds` (Cartesian twist doesn't work on this arm - see Limitations). These bypass the bridge's velocity shaping and its self-collision check; Servo does its own collision checking against the planning scene.
 
-Needs MoveIt installed (`ros-<distro>-moveit-*`, plus `moveit-servo` for `servo:=true`). MoveIt is packaged for kilted and lyrical on robostack, but this package has only been run on kilted.
+Needs MoveIt installed (`ros-<distro>-moveit-*`, plus `moveit-servo` for `servo:=true`). MoveIt is packaged for kilted, jazzy and lyrical, and the launch tests below run on all three in CI (apt MoveIt); interactive use with RViz has only been tried on kilted via robostack.
 
 ### Launch arguments
 

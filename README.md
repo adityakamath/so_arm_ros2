@@ -1,6 +1,6 @@
 # SO-ARM ROS 2
 
-[![ROS 2](https://img.shields.io/badge/ROS_2-Kilted_%7C_Jazzy-blue?logo=ros)](https://docs.ros.org)
+[![ROS 2](https://img.shields.io/badge/ROS_2-Kilted_%7C_Jazzy_%7C_Lyrical-blue?logo=ros)](https://docs.ros.org)
 [![CI](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml/badge.svg)](https://github.com/adityakamath/so_arm_ros2/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
@@ -164,14 +164,21 @@ Replay always takes priority over manual control while active — see `joint_sta
 
 ## MoveIt
 
-[`so_arm_moveit`](so_arm_moveit/README.md) plans and executes motions for either model, with MoveIt Servo as an option. MoveIt is packaged for both kilted and lyrical on robostack; it is only tested on kilted. Run it next to the control stack:
+[`so_arm_moveit`](so_arm_moveit/README.md) plans and executes motions for either model, with MoveIt Servo as an option. MoveIt is packaged for kilted, jazzy and lyrical, and its launch tests run in CI on all three. One command starts everything, with the control stack in the MoveIt mode:
+
+```bash
+ros2 launch so_arm_bringup moveit.launch.py use_mock:=true             # control + move_group + RViz
+ros2 launch so_arm_bringup moveit.launch.py servo:=true use_mock:=true # MoveIt Servo (joint jog) instead
+```
+
+Or run MoveIt next to a control stack you started yourself:
 
 ```bash
 ros2 launch so_arm_control control.launch.py use_mock:=true
 ros2 launch so_arm_moveit move_group.launch.py
 ```
 
-MoveIt needs different controllers than teleop (an arm-only trajectory controller and a gripper action controller), so its launch file switches the running control stack into [`moveit` mode](so_arm_control/README.md#controller-modes) and back to the default `teleop` mode on exit - nothing is switched by hand, and teleop, record/replay and the bridge are unaffected. `servo:=true` runs MoveIt Servo instead. It takes the same `namespace` option, so `namespace:=arm1` on both targets a namespaced arm.
+MoveIt needs different controllers than teleop (an arm-only trajectory controller and a gripper action controller), so `moveit.launch.py` starts the control stack in that mode directly (and has no teleop or record/replay - the two can't command the arm at once; use `teleop.launch.py` for those). Launched on its own, `move_group.launch.py` instead switches a running control stack into [`moveit` mode](so_arm_control/README.md#controller-modes) and back to the default `teleop` mode on exit - nothing is switched by hand, and teleop, record/replay and the bridge are unaffected. `servo:=true` runs MoveIt Servo instead. It takes the same `namespace` option, so `namespace:=arm1` on both targets a namespaced arm.
 
 ## Leader-follower (dual arm)
 
@@ -179,7 +186,7 @@ MoveIt needs different controllers than teleop (an arm-only trajectory controlle
 
 ## Tests
 
-CI (`.github/workflows/ci.yml`) runs `ruff` and then every package's tests inside the `ros:<distro>` containers for **Kilted, Jazzy and Lyrical**. Besides unit and config tests, there are `launch_testing` integration tests that bring up the real stack on the mock STS hardware (`use_mock:=true`): the control stack in each [controller mode](so_arm_control/README.md#controller-modes), the composed `teleop.launch.py` with and without a `namespace`, and `so_arm_moveit` end to end - mode switching, joint and named-state goals through `/move_action`, a namespaced stack, and Servo joint jog. The MoveIt tests skip themselves when MoveIt isn't installed.
+CI (`.github/workflows/ci.yml`) runs `ruff` and then every package's tests inside the `ros:<distro>` containers for **Kilted, Jazzy and Lyrical**. Besides unit and config tests, there are `launch_testing` integration tests that bring up the real stack on the mock STS hardware (`use_mock:=true`): the control stack in each [controller mode](so_arm_control/README.md#controller-modes), the composed `teleop.launch.py` with and without a `namespace`, `moveit.launch.py`, and `so_arm_moveit` end to end - mode switching, joint and named-state goals through `/move_action`, a namespaced stack, and Servo joint jog with and without the wrist camera model. The MoveIt tests skip themselves when MoveIt isn't installed.
 
 Each package's README has the exact commands. Two things to know when running them yourself:
 - Run one test file per `pytest` invocation (as CI does): pinocchio and python-fcl need incompatible numpy ABIs, and each launch test owns the ROS graph while it runs.

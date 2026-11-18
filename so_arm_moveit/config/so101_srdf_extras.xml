@@ -19,7 +19,7 @@
     <joint name="wrist_flex_joint" value="-1.0" />
     <joint name="wrist_roll_joint" value="0" />
   </group_state>
-  <!-- open matches pick_place.py's GRIP_OPEN; closed is the range's upper end (0.1745). -->
+  <!-- open is mid-range (-1.4 of [-1.745, 0.1745]); closed is the range's upper end (0.1745). -->
   <group_state name="open" group="gripper">
     <joint name="gripper_joint" value="-1.4" />
   </group_state>

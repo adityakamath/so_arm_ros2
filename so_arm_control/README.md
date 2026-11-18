@@ -20,7 +20,7 @@ The `ros2_control` setup for the SO-ARM100 family: the joint trajectory controll
 
 ## Requirements
 
-- ROS 2 Kilted or Jazzy with `ros2_control`, `ros2_controllers` (`joint_state_broadcaster`, `joint_trajectory_controller`), `joy` and `joy_teleop`.
+- ROS 2 Kilted, Jazzy or Lyrical with `ros2_control`, `ros2_controllers` (`joint_state_broadcaster`, `joint_trajectory_controller`), `joy` and `joy_teleop`.
 - [`sts_hardware_interface`](https://github.com/adityakamath/sts_hardware_interface), built separately anywhere in this workspace's `src/`.
 - [Pinocchio](https://github.com/stack-of-tasks/pinocchio) (`sudo apt install ros-kilted-pinocchio`) for the IK solver.
 - `python-fcl` and `numpy-stl` (pip) for self-collision checking — install with `./scripts/bootstrap_external_deps.sh`. If missing, `joint_trajectory_bridge` logs an error and disables the check instead of crashing.

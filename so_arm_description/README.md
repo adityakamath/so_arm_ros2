@@ -14,7 +14,7 @@ URDF/xacro models of the SO-ARM100 family: SO100 and SO101, 5-DOF + gripper arms
 
 ## Requirements
 
-ROS 2 Kilted or Jazzy with `xacro`, and [`sts_hardware_interface`](https://github.com/adityakamath/sts_hardware_interface) (the `<ros2_control>` block references its plugin name; only needed for the actual hardware interface at runtime, not to expand the xacro).
+ROS 2 Kilted, Jazzy or Lyrical with `xacro`, and [`sts_hardware_interface`](https://github.com/adityakamath/sts_hardware_interface) (the `<ros2_control>` block references its plugin name; only needed for the actual hardware interface at runtime, not to expand the xacro).
 
 ## Running
 
