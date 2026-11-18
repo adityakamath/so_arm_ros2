@@ -11,8 +11,12 @@ own joint limit (shoulder_link intersects lower_arm_link near elbow_flex_joint's
 constructed synthetically. An unclamped path through this pose is a real self-collision.
 """
 
+import subprocess
+
+from ament_index_python.packages import get_package_share_directory
 import pytest
 
+from so_arm_control.so_arm_utils.robot_paths import urdf_xacro_path
 from so_arm_control.so_arm_utils.self_collision_checker import SelfCollisionChecker
 
 
@@ -41,6 +45,53 @@ class TestConstruction:
     def test_non_adjacent_pair_included(self, checker):
         """Base_link/upper_arm_link (2 real joints apart) are a genuine collision candidate."""
         assert _pair_in(checker.checked_pairs, 'base_link', 'upper_arm_link')
+
+
+@pytest.fixture(scope='module')
+def so100_checker():
+    urdf = subprocess.run(
+        ['xacro', urdf_xacro_path(get_package_share_directory('so_arm_description'), 'so100')],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return SelfCollisionChecker(urdf)
+
+
+class TestSo100:
+    """The SO100 has its own geometry, joint limits and gripper range; everything above ran on
+    the SO101 only."""
+
+    def test_checked_pairs_populated(self, so100_checker):
+        assert len(so100_checker.checked_pairs) > 0
+        for a, b in so100_checker.checked_pairs:
+            assert (a, b) in so100_checker.joints_between_cache
+
+    def test_pair_overlapping_at_the_start_pose_is_not_checked(self, so100_checker):
+        """base_link and upper_arm_link already overlap with every joint at zero (a valid touch,
+        not a collision), so they must not be tracked."""
+        assert not _pair_in(so100_checker.checked_pairs, 'base_link', 'upper_arm_link')
+
+    def test_non_adjacent_pair_included(self, so100_checker):
+        assert _pair_in(so100_checker.checked_pairs, 'base_link', 'lower_arm_link')
+
+    def test_start_pose_is_collision_free(self, so100_checker):
+        assert so100_checker.check({}) == []
+
+    # Found by sweeping random joint values within the SO100's limits: the only contact is the
+    # named pair.
+    @pytest.mark.parametrize('pair, joints', [
+        (('gripper_link', 'shoulder_link'), {
+            'shoulder_pan_joint': 0.24, 'shoulder_lift_joint': 2.17, 'elbow_flex_joint': -0.19,
+            'wrist_flex_joint': -0.62, 'wrist_roll_joint': -0.43, 'gripper_joint': 1.38}),
+        (('base_link', 'lower_arm_link'), {
+            'shoulder_pan_joint': -1.37, 'shoulder_lift_joint': 3.43, 'elbow_flex_joint': -0.82,
+            'wrist_flex_joint': -0.71, 'wrist_roll_joint': 1.5, 'gripper_joint': 0.13}),
+        (('moving_jaw_link', 'upper_arm_link'), {
+            'shoulder_pan_joint': -1.44, 'shoulder_lift_joint': 0.44, 'elbow_flex_joint': -0.8,
+            'wrist_flex_joint': 1.2, 'wrist_roll_joint': -2.8, 'gripper_joint': 1.58}),
+    ])
+    def test_real_collision_is_detected(self, so100_checker, pair, joints):
+        collisions = so100_checker.check(joints)
+        assert len(collisions) == 1 and _pair_in(collisions, *pair), collisions
 
 
 class TestMeshScale:

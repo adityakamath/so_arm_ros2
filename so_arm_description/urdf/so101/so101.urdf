@@ -7,7 +7,6 @@
   <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
   <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
   <!-- N⋅m (30 kgf⋅cm for STS3215) -->
-  <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
   <material name="light_grey">
     <color rgba="0.8 0.8 0.8 1.0"/>
   </material>
@@ -286,7 +285,6 @@
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
   </link>
-  <!-- SO-101 wrist camera mount (Hex-Nut Recess, 32x32 UVC module form factor). -->
   <link name="wrist_camera_mount_link">
     <inertial>
       <origin rpy="0 0 0" xyz="0 0 0"/>

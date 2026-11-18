@@ -116,3 +116,20 @@ def test_position_operating_mode_is_default(model):
             f'{model}: {joint.get("name")} command interfaces {cmd_interfaces} '
             "!= {'position', 'velocity'} under the default operating mode"
         )
+
+
+# ── checked-in static URDFs ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize('model', _MODELS)
+def test_checked_in_static_urdf_matches_the_xacro(model):
+    """urdf/<model>/<model>.urdf is the xacro's output with default arguments and its
+    package:// mesh URIs rewritten to paths relative to the file (see the README's
+    "Regenerating the pre-built URDFs"); it must not fall behind the xacro."""
+    urdf_dir = os.path.join(_SHARE, 'urdf', model)
+    expanded = _run_xacro(os.path.join(urdf_dir, f'{model}.urdf.xacro'))
+    expected = expanded.replace('package://so_arm_description/', '../../')
+    with open(os.path.join(urdf_dir, f'{model}.urdf')) as f:
+        static = f.read()
+    assert 'package://' not in static, 'static URDF mesh paths must be relative, not package://'
+    assert ET.canonicalize(static, strip_text=True) == ET.canonicalize(expected, strip_text=True), (
+        f'{model}.urdf is out of date - regenerate it (see the README)')

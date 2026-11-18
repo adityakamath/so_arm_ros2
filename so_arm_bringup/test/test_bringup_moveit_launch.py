@@ -7,12 +7,9 @@ sts_hardware_interface built, and is skipped without MoveIt installed. The plann
 and Servo behaviour themselves are covered by so_arm_moveit's own launch tests.
 """
 
-import itertools
-import time
 import unittest
 
 from ament_index_python.packages import get_package_prefix, PackageNotFoundError
-from controller_manager_msgs.srv import ListControllers
 import launch
 import launch.actions
 import launch.substitutions
@@ -20,8 +17,8 @@ import launch_ros.substitutions
 import launch_testing
 import launch_testing.actions
 import pytest
-import rclpy
 from rclpy.action import ActionClient
+from so_arm_control.so_arm_utils.launch_test_support import controller_states, make_node
 
 for _package in ('moveit_ros_move_group', 'moveit_kinematics', 'moveit_planners_ompl',
                  'moveit_simple_controller_manager', 'moveit_msgs', 'so_arm_moveit'):
@@ -32,7 +29,6 @@ for _package in ('moveit_ros_move_group', 'moveit_kinematics', 'moveit_planners_
 
 from moveit_msgs.action import MoveGroup  # noqa: E402
 
-_name_counter = itertools.count()
 MOVEIT_MODE = {
     'joint_state_broadcaster': 'active',
     'arm_trajectory_controller': 'active', 'gripper_controller': 'active',
@@ -60,27 +56,14 @@ class TestMoveitBringup(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not rclpy.ok():
-            rclpy.init()
-        cls._node = rclpy.create_node(f'test_bringup_moveit_{next(_name_counter)}')
+        cls._node = make_node('test_bringup_moveit')
 
     @classmethod
     def tearDownClass(cls):
         cls._node.destroy_node()
 
     def test_control_stack_starts_in_moveit_mode(self):
-        client = self._node.create_client(ListControllers, '/controller_manager/list_controllers')
-        self.assertTrue(client.wait_for_service(timeout_sec=90.0), 'no controller manager')
-        deadline = time.monotonic() + 90.0
-        states = {}
-        while time.monotonic() < deadline:
-            future = client.call_async(ListControllers.Request())
-            rclpy.spin_until_future_complete(self._node, future, timeout_sec=5.0)
-            if future.result() is not None:
-                states = {c.name: c.state for c in future.result().controller}
-                if all(states.get(n) == s for n, s in MOVEIT_MODE.items()):
-                    break
-            time.sleep(0.5)
+        states = controller_states(self._node, MOVEIT_MODE, timeout=90.0)
         for name, state in MOVEIT_MODE.items():
             self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 

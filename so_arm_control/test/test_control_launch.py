@@ -11,11 +11,9 @@ controller_manager -> joint_state_broadcaster/state_interfaces_broadcaster/so_ar
 joint_trajectory_bridge, including the self-collision checker built from the real URDF/meshes.
 """
 
-import itertools
 import time
 import unittest
 
-from _launch_helpers import controller_states as _controller_states
 import launch
 import launch.actions
 import launch.substitutions
@@ -27,13 +25,13 @@ import rclpy
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
+from so_arm_control.so_arm_utils.launch_test_support import controller_states, make_node, wait_for_message
 from trajectory_msgs.msg import JointTrajectory
 
 _JOINT_NAMES = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_flex_joint',
     'wrist_flex_joint', 'wrist_roll_joint', 'gripper_joint',
 ]
-_name_counter = itertools.count()
 
 # robot_state_publisher publishes /robot_description exactly once, transient-local - a plain
 # volatile subscriber that connects any time after that (which every test node here does) would
@@ -62,22 +60,6 @@ def generate_test_description():
     ]), {}
 
 
-def _make_node():
-    if not rclpy.ok():
-        rclpy.init()
-    return rclpy.create_node(f'test_control_launch_{next(_name_counter)}')
-
-
-def _wait_for_message(node, topic, msg_type, timeout=30.0, qos=10):
-    received = []
-    sub = node.create_subscription(msg_type, topic, received.append, qos)
-    deadline = time.monotonic() + timeout
-    while not received and time.monotonic() < deadline:
-        rclpy.spin_once(node, timeout_sec=0.2)
-    node.destroy_subscription(sub)
-    return received[0] if received else None
-
-
 def _collect_messages(node, topic, msg_type, duration, after_subscribed=None):
     """
     If after_subscribed is given, it's called (e.g. to publish a one-shot trigger message)
@@ -103,21 +85,21 @@ class TestControlStackComesUp(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_control_launch')
 
     @classmethod
     def tearDownClass(cls):
         cls._node.destroy_node()
 
     def test_robot_description_is_published(self):
-        msg = _wait_for_message(
+        msg = wait_for_message(
             self._node, '/robot_description', String, timeout=30.0, qos=_ROBOT_DESCRIPTION_QOS,
         )
         self.assertIsNotNone(msg, '/robot_description never published')
         self.assertIn('robot', msg.data)
 
     def test_joint_states_are_published(self):
-        msg = _wait_for_message(self._node, '/joint_states', JointState, timeout=30.0)
+        msg = wait_for_message(self._node, '/joint_states', JointState, timeout=30.0)
         self.assertIsNotNone(msg, '/joint_states never published')
         self.assertTrue(set(_JOINT_NAMES) <= set(msg.name))
 
@@ -127,7 +109,7 @@ class TestControlStackComesUp(unittest.TestCase):
             'joint_state_broadcaster': 'active', 'state_interfaces_broadcaster': 'active',
             'so_arm_controller': 'active',
         }
-        states = _controller_states(self._node, want=want)
+        states = controller_states(self._node, want=want)
         for name, state in want.items():
             self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 
@@ -138,7 +120,7 @@ class TestControlStackComesUp(unittest.TestCase):
             'arm_trajectory_controller': 'inactive', 'forward_position_controller': 'inactive',
             'gripper_controller': 'inactive',
         }
-        states = _controller_states(self._node, want=want)
+        states = controller_states(self._node, want=want)
         for name, state in want.items():
             self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 
@@ -148,7 +130,7 @@ class TestJointTrajectoryBridgeIntegration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_control_launch')
         cls._pub = cls._node.create_publisher(JointState, '/joint_commands', 10)
         # Give the bridge's self-collision checker (mesh loading, ~5s) time to become ready -
         # observed via its own log in manual testing; there's no topic/service to poll for this

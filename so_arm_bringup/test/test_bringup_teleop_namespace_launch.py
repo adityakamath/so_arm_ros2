@@ -8,11 +8,9 @@ included launch push it again (included launches inherit the parent's configurat
 every node under /arm1/arm1. Uses use_mock:=true, so it needs sts_hardware_interface built.
 """
 
-import itertools
 import time
 import unittest
 
-from controller_manager_msgs.srv import ListControllers
 import launch
 import launch.actions
 import launch.substitutions
@@ -22,10 +20,12 @@ import launch_testing.actions
 import pytest
 import rclpy
 from sensor_msgs.msg import JointState
+from so_arm_control.so_arm_utils.launch_test_support import (
+    controller_states, make_node, wait_for_message,
+)
 from tf2_msgs.msg import TFMessage
 
 _NAMESPACE = 'arm1'
-_name_counter = itertools.count()
 
 
 @pytest.mark.launch_test
@@ -43,27 +43,11 @@ def generate_test_description():
     return launch.LaunchDescription([so_arm, launch_testing.actions.ReadyToTest()]), {}
 
 
-def _make_node():
-    if not rclpy.ok():
-        rclpy.init()
-    return rclpy.create_node(f'test_so_arm_namespace_{next(_name_counter)}')
-
-
-def _wait_for_message(node, topic, msg_type, timeout=30.0, qos=10):
-    received = []
-    sub = node.create_subscription(msg_type, topic, received.append, qos)
-    deadline = time.monotonic() + timeout
-    while not received and time.monotonic() < deadline:
-        rclpy.spin_once(node, timeout_sec=0.2)
-    node.destroy_subscription(sub)
-    return received[0] if received else None
-
-
 class TestNamespacedStack(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_bringup_teleop_namespace')
 
     @classmethod
     def tearDownClass(cls):
@@ -85,24 +69,13 @@ class TestNamespacedStack(unittest.TestCase):
                          'a controller_manager also exists outside the namespace')
 
     def test_controllers_become_active_under_the_namespace(self):
-        service = f'/{_NAMESPACE}/controller_manager/list_controllers'
-        client = self._node.create_client(ListControllers, service)
-        self.assertTrue(client.wait_for_service(timeout_sec=30.0), f'{service} never available')
-        want = {'joint_state_broadcaster', 'so_arm_controller'}
-        deadline = time.monotonic() + 30.0
-        active = set()
-        while time.monotonic() < deadline:
-            future = client.call_async(ListControllers.Request())
-            rclpy.spin_until_future_complete(self._node, future, timeout_sec=5.0)
-            if future.result() is not None:
-                active = {c.name for c in future.result().controller if c.state == 'active'}
-                if want <= active:
-                    break
-            time.sleep(0.5)
-        self.assertTrue(want <= active, f'not active under /{_NAMESPACE}: {active}')
+        want = {'joint_state_broadcaster': 'active', 'so_arm_controller': 'active'}
+        states = controller_states(self._node, want, namespace=_NAMESPACE)
+        active = {name for name, state in states.items() if state == 'active'}
+        self.assertTrue(set(want) <= active, f'not active under /{_NAMESPACE}: {states}')
 
     def test_joint_states_are_published_under_the_namespace(self):
-        msg = _wait_for_message(self._node, f'/{_NAMESPACE}/joint_states', JointState)
+        msg = wait_for_message(self._node, f'/{_NAMESPACE}/joint_states', JointState)
         self.assertIsNotNone(msg, f'/{_NAMESPACE}/joint_states never published')
         self.assertIn('shoulder_pan_joint', msg.name)
 
@@ -111,7 +84,7 @@ class TestNamespacedStack(unittest.TestCase):
         # is exactly why frame_prefix exists - arms are told apart by frame name, not by topic.
         # (The dynamic /tf, not /tf_static: a late subscriber's view of that latched topic
         # varies by RMW, while joint transforms are republished continuously.)
-        msg = _wait_for_message(self._node, '/tf', TFMessage)
+        msg = wait_for_message(self._node, '/tf', TFMessage)
         self.assertIsNotNone(msg, '/tf never published')
         frames = {t.child_frame_id for t in msg.transforms}
         self.assertTrue(frames, 'no transforms published')

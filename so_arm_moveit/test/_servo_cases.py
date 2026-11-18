@@ -4,11 +4,12 @@ through the subclasses; each file supplies its own generate_test_description()."
 
 import time
 
-from _moveit_support import ARM_JOINTS, make_node, wait_for_controllers
+from _moveit_support import ARM_JOINTS
 from control_msgs.msg import JointJog
 from moveit_msgs.srv import ServoCommandType
 import rclpy
 from sensor_msgs.msg import JointState
+from so_arm_control.so_arm_utils.launch_test_support import controller_states, make_node
 from std_msgs.msg import Float64MultiArray
 
 SERVO_MODE = {
@@ -34,12 +35,12 @@ class ServoCases:
         cls._node.destroy_node()
 
     def test_launch_switches_the_stack_into_servo_mode(self):
-        states = wait_for_controllers(self._node, SERVO_MODE)
+        states = controller_states(self._node, SERVO_MODE, timeout=90.0)
         for name, state in SERVO_MODE.items():
             self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 
     def test_joint_jog_moves_the_arm(self):
-        wait_for_controllers(self._node, SERVO_MODE)
+        controller_states(self._node, SERVO_MODE, timeout=90.0)
         jog = self._node.create_publisher(JointJog, '/servo_node/delta_joint_cmds', 10)
         nudge = self._node.create_publisher(
             Float64MultiArray, '/forward_position_controller/commands', 10)

@@ -18,11 +18,11 @@ bool_toggle_node itself. The actual trigger/target-service response behavior (su
 graceful-failure-when-target-missing, external-sync) is already covered there instead.
 """
 
-import itertools
 import time
 import unittest
 
 from geometry_msgs.msg import TwistStamped
+from so_arm_control.so_arm_utils.launch_test_support import make_node
 import launch
 import launch.actions
 import launch.substitutions
@@ -33,8 +33,6 @@ import pytest
 import rclpy
 from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
-
-_name_counter = itertools.count()
 
 
 @pytest.mark.launch_test
@@ -53,17 +51,11 @@ def generate_test_description():
     ]), {}
 
 
-def _make_node():
-    if not rclpy.ok():
-        rclpy.init()
-    return rclpy.create_node(f'test_teleop_launch_{next(_name_counter)}')
-
-
 class TestTeleopNodesComeUp(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_teleop_launch')
 
     @classmethod
     def tearDownClass(cls):
@@ -80,7 +72,7 @@ class TestTeleopTopicsAcceptInput(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_teleop_launch')
 
     @classmethod
     def tearDownClass(cls):

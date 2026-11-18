@@ -3,7 +3,6 @@
 uses use_mock:=true against ros2_control_hardware_type:=real (requires sts_hardware_interface
 built). Covers the composition itself and the record/replay filesystem round trip."""
 
-import itertools
 import os
 import shutil
 import time
@@ -18,14 +17,13 @@ import launch_testing
 import launch_testing.actions
 import pytest
 import rclpy
+from so_arm_control.so_arm_utils.launch_test_support import make_node
 from std_srvs.srv import SetBool, Trigger
 
 # recordings_dir isn't exposed as a launch arg, so this writes into the real recordings dir -
 # clean up whatever new bag directories appear, below.
 _WS_ROOT = os.path.dirname(os.path.dirname(get_package_prefix('so_arm_bringup')))
 _REAL_RECORDINGS_DIR = os.path.join(_WS_ROOT, 'src', 'so_arm_ros2', 'so_arm_bringup', 'recordings')
-
-_name_counter = itertools.count()
 
 
 @pytest.mark.launch_test
@@ -47,17 +45,11 @@ def generate_test_description():
     ]), {}
 
 
-def _make_node():
-    if not rclpy.ok():
-        rclpy.init()
-    return rclpy.create_node(f'test_so_arm_launch_{next(_name_counter)}')
-
-
 class TestComposedStackComesUp(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_bringup_teleop')
 
     @classmethod
     def tearDownClass(cls):
@@ -84,7 +76,7 @@ class TestRecordingIntegration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._node = _make_node()
+        cls._node = make_node('test_bringup_teleop')
         cls._client = cls._node.create_client(SetBool, '/record')
         assert cls._client.wait_for_service(timeout_sec=30.0), '/record never available'
 

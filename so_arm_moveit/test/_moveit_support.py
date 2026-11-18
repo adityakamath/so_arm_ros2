@@ -5,14 +5,12 @@ the same action MoveIt's RViz panel uses. They need MoveIt installed and are ski
 (the launch-helper unit tests in test_launch_helpers.py don't).
 """
 
-import itertools
 import time
 import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import (
     get_package_prefix, get_package_share_directory, PackageNotFoundError,
 )
-from controller_manager_msgs.srv import ListControllers
 import launch
 import launch.actions
 import launch.launch_description_sources
@@ -28,10 +26,14 @@ ARM_JOINTS = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_flex_joint', 'wrist_flex_joint',
     'wrist_roll_joint',
 ]
+# A joint-space goal inside both models' limits, away from the start pose and from collisions
+# (test_moveit_config.py checks that for every model).
+JOINT_GOAL = {
+    'shoulder_pan_joint': 0.4, 'shoulder_lift_joint': 0.5, 'elbow_flex_joint': -0.5,
+    'wrist_flex_joint': 0.3, 'wrist_roll_joint': 0.0,
+}
 # Where the arm ends up vs the goal: the mock servos lag a little at MoveIt's speeds.
 SETTLED_TOLERANCE = 0.08
-
-_name_counter = itertools.count()
 
 
 def require_moveit(*extra_packages):
@@ -46,7 +48,7 @@ def require_moveit(*extra_packages):
             pytest.skip(f'{package} is not installed', allow_module_level=True)
 
 
-def description(namespace='', servo=False, wrist_camera_urdf='true'):
+def description(namespace='', servo=False, wrist_camera_urdf='true', model='so101'):
     """control (mock hardware) first, MoveIt a bit later: the controller-mode switch needs the
     controllers already spawned, as when a user launches the two in order. Both get the same
     wrist_camera_urdf, as they must (the planning model has to match the robot)."""
@@ -61,14 +63,14 @@ def description(namespace='', servo=False, wrist_camera_urdf='true'):
     control = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(control_launch),
         launch_arguments={
-            'model': 'so101', 'use_mock': 'true', 'namespace': namespace,
+            'model': model, 'use_mock': 'true', 'namespace': namespace,
             'wrist_camera_urdf': wrist_camera_urdf,
         }.items(),
     )
     moveit = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(moveit_launch),
         launch_arguments={
-            'model': 'so101', 'rviz': 'false', 'namespace': namespace,
+            'model': model, 'rviz': 'false', 'namespace': namespace,
             'servo': 'true' if servo else 'false', 'wrist_camera_urdf': wrist_camera_urdf,
         }.items(),
     )
@@ -79,33 +81,8 @@ def description(namespace='', servo=False, wrist_camera_urdf='true'):
     ]), {}
 
 
-def make_node(prefix):
-    if not rclpy.ok():
-        rclpy.init()
-    return rclpy.create_node(f'{prefix}_{next(_name_counter)}')
-
-
 def _prefix(namespace):
     return f'/{namespace}' if namespace else ''
-
-
-def wait_for_controllers(node, want, namespace='', timeout=90.0):
-    """Poll list_controllers until the {name: state} subset `want` holds; return the last states."""
-    service = f'{_prefix(namespace)}/controller_manager/list_controllers'
-    client = node.create_client(ListControllers, service)
-    if not client.wait_for_service(timeout_sec=timeout):
-        return {}
-    deadline = time.monotonic() + timeout
-    states = {}
-    while time.monotonic() < deadline:
-        future = client.call_async(ListControllers.Request())
-        rclpy.spin_until_future_complete(node, future, timeout_sec=5.0)
-        if future.result() is not None:
-            states = {c.name: c.state for c in future.result().controller}
-            if all(states.get(name) == state for name, state in want.items()):
-                break
-        time.sleep(0.5)
-    return states
 
 
 def joint_positions(node, namespace='', timeout=30.0, settle=0.0):

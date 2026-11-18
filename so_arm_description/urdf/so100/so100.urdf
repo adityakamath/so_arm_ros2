@@ -7,7 +7,6 @@
   <!-- Gripper joint 6: 0=Position, 1=Velocity, 2=PWM/Effort -->
   <!-- protocol's own u16 ceiling - let servo firmware, not us, set the real cap -->
   <!-- N⋅m (30 kgf⋅cm for STS3215) -->
-  <!-- 0=Position 1=Velocity 2=PWM; gripper joint 6; baked at startup -->
   <material name="light_grey">
     <color rgba="0.8 0.8 0.8 1.0"/>
   </material>

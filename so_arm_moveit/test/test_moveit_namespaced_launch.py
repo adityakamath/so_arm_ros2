@@ -11,10 +11,10 @@ a display; see the Namespacing section of the package README. Skipped without Mo
 import unittest
 
 from _moveit_support import (
-    description, joint_positions, make_node, move_to, named_states, require_moveit,
-    SETTLED_TOLERANCE, wait_for_controllers,
+    description, joint_positions, move_to, named_states, require_moveit, SETTLED_TOLERANCE,
 )
 import pytest
+from so_arm_control.so_arm_utils.launch_test_support import controller_states, make_node
 
 require_moveit()
 
@@ -42,12 +42,12 @@ class TestNamespacedMoveItStack(unittest.TestCase):
         cls._node.destroy_node()
 
     def test_launch_switches_the_namespaced_stack_into_moveit_mode(self):
-        states = wait_for_controllers(self._node, MOVEIT_MODE, namespace=NAMESPACE)
+        states = controller_states(self._node, MOVEIT_MODE, namespace=NAMESPACE, timeout=90.0)
         for name, state in MOVEIT_MODE.items():
             self.assertEqual(states.get(name), state, f'{name} is not {state}: {states}')
 
     def test_joint_goal_is_planned_and_executed_under_the_namespace(self):
-        wait_for_controllers(self._node, MOVEIT_MODE, namespace=NAMESPACE)
+        controller_states(self._node, MOVEIT_MODE, namespace=NAMESPACE, timeout=90.0)
         goal = {
             'shoulder_pan_joint': 0.4, 'shoulder_lift_joint': 0.5, 'elbow_flex_joint': -0.5,
             'wrist_flex_joint': 0.3, 'wrist_roll_joint': 0.0,
@@ -58,7 +58,7 @@ class TestNamespacedMoveItStack(unittest.TestCase):
             self.assertAlmostEqual(now[joint], target, delta=SETTLED_TOLERANCE, msg=joint)
 
     def test_gripper_state_executes_under_the_namespace(self):
-        wait_for_controllers(self._node, MOVEIT_MODE, namespace=NAMESPACE)
+        controller_states(self._node, MOVEIT_MODE, namespace=NAMESPACE, timeout=90.0)
         group, joints = named_states()['closed']
         self.assertEqual(move_to(self._node, group, joints, namespace=NAMESPACE), SUCCESS)
         now = joint_positions(self._node, namespace=NAMESPACE, settle=2.5)

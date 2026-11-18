@@ -9,7 +9,10 @@ command the same joints, are not.
 import time
 import unittest
 
-from _launch_helpers import controller_states, make_node, mode_description, wait_for_action
+from _launch_helpers import mode_description
+from so_arm_control.so_arm_utils.launch_test_support import (
+    controller_states, make_node, wait_for_action,
+)
 import launch_testing
 import pytest
 import rclpy

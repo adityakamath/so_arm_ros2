@@ -10,6 +10,7 @@ URDF/xacro models of the SO-ARM100 family: SO100 and SO101, 5-DOF + gripper arms
 | `urdf/*/*.control.xacro` | Shared hardware parameters: serial port, motor IDs, PID coefficients, joint limits |
 | `urdf/*/*.common.xacro` | Geometry constants: colours and joint origins (from onshape-to-robot calibration) |
 | `urdf/*/*.urdf` | Pre-generated URDFs of both models |
+| `urdf/so100/so100.urdf`, `urdf/so101/so101.urdf` | Pre-built plain URDFs (default arguments, wrist camera included) with mesh paths relative to the file, for tools that don't resolve `package://`; kept in sync by a test |
 | `meshes/so100/`, `meshes/so101/` | STL files for each model, including the SO101 wrist camera mount |
 
 ## Requirements
@@ -66,7 +67,16 @@ base_footprint
 
 ## Regenerating the pre-built URDFs
 
-The checked-in `.urdf` files are plain output from the commands in [Running](#running) above — there's no separate generator or staleness check, so regenerate them by hand after any xacro change and commit the result.
+The checked-in `.urdf` files are the xacro's output with default arguments, with the `package://so_arm_description/` mesh URIs rewritten to paths relative to the file (`../../meshes/...`) so they open without a ROS install. After any xacro change, regenerate and commit them:
+
+```bash
+cd urdf
+for m in so100 so101; do
+  xacro $m/$m.urdf.xacro | sed 's|package://so_arm_description/|../../|g' > $m/$m.urdf
+done
+```
+
+`test_urdf_xacro.py` fails if either file has fallen behind the xacro or contains a `package://` path.
 
 ## Tests
 
