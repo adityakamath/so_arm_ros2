@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Single-arm SO-ARM bringup: composes so_arm_control's control.launch.py + teleop.launch.py
-with so_arm_bringup's own record_replay.launch.py and (wrist_camera:=true + real hardware
-+ wrist_camera_urdf:=true) wrist_camera.launch.py. wrist_camera_urdf also gates the
-URDF-side mount/links, and disabling it implies no camera node either."""
+"""Single-arm SO-ARM MoveIt bringup: so_arm_control's control.launch.py started in the `moveit`
+(or, with servo:=true, `servo`) controller mode, plus so_arm_moveit's move_group.launch.py and,
+as in teleop.launch.py, the wrist camera.
+
+MoveIt and teleop can't run together: MoveIt executes through arm_trajectory_controller and
+teleop, record/replay and the bridge through so_arm_controller, and two controllers can't command
+the same joints. So this launch has no teleop or record/replay; use teleop.launch.py for those.
+Needs MoveIt installed (see so_arm_moveit's README); so_arm_bringup does not depend on it, so
+teleop.launch.py keeps working without it."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -13,6 +18,10 @@ from launch_ros.substitutions import FindPackageShare
 
 from so_arm_control.so_arm_utils.namespacing import namespace_arg
 from so_arm_control.so_arm_utils.robot_paths import VALID_MODELS
+
+# move_group goes up after the controllers are spawned, as when the two are launched one after
+# the other by hand (starting them together has made the controller spawners fail to load).
+MOVEIT_START_DELAY = 12.0
 
 
 def generate_launch_description():
@@ -23,25 +32,22 @@ def generate_launch_description():
     ros2_control_hardware_type = LaunchConfiguration('ros2_control_hardware_type')
     mujoco_headless = LaunchConfiguration('mujoco_headless')
     mujoco_arena = LaunchConfiguration('mujoco_arena')
-    # Each included launch pushes the namespace itself and derives frame_prefix from it
-    # (namespacing.py); passing it explicitly below, rather than pushing it here too, avoids
-    # the doubled /ns/ns that parent-config inheritance would otherwise cause.
+    # Passed explicitly to every include rather than pushed here, as in teleop.launch.py, so
+    # nothing is namespaced twice (see namespacing.py).
     namespace = LaunchConfiguration('namespace')
     frame_prefix = LaunchConfiguration('frame_prefix')
-    replay_loops = LaunchConfiguration('replay_loops')
     wrist_camera = LaunchConfiguration('wrist_camera')
     wrist_camera_urdf = LaunchConfiguration('wrist_camera_urdf')
+    servo = LaunchConfiguration('servo')
+    rviz = LaunchConfiguration('rviz')
 
-    pkg_ctrl = FindPackageShare('so_arm_control')
     pkg_bringup = FindPackageShare('so_arm_bringup')
-    control_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'control.launch.py'])
-    teleop_launch = PathJoinSubstitution([pkg_ctrl, 'launch', 'teleop.launch.py'])
-    record_replay_launch = PathJoinSubstitution(
-        [pkg_bringup, 'launch', 'record_replay.launch.py']
-    )
+    control_launch = PathJoinSubstitution(
+        [FindPackageShare('so_arm_control'), 'launch', 'control.launch.py'])
+    move_group_launch = PathJoinSubstitution(
+        [FindPackageShare('so_arm_moveit'), 'launch', 'move_group.launch.py'])
     wrist_camera_launch = PathJoinSubstitution(
-        [pkg_bringup, 'launch', 'wrist_camera.launch.py']
-    )
+        [pkg_bringup, 'launch', 'wrist_camera.launch.py'])
 
     declared_arguments = [
         DeclareLaunchArgument(
@@ -70,42 +76,45 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'mujoco_arena', default_value='false',
-            description=(
-                'mujoco only: true adds a small tabletop workspace within reach - three '
-                'graspable cubes and a tray - on top of the default flat skybox+floor scene.'
-            ),
+            description='mujoco only: true adds the tabletop workspace (cubes and a tray).',
         ),
         DeclareLaunchArgument(
             'frame_prefix', default_value='',
             description=(
-                'Prefix for all published tf frame_ids (e.g. "leader/"); empty = no prefix, '
-                'the single-arm default.'
-            ),
-        ),
-        DeclareLaunchArgument(
-            'replay_loops', default_value='',
-            description=(
-                "Override record_replay_node's replay_loops (0 = loop forever, N>0 = exactly "
-                'N total passes); empty uses yaml value.'
+                'Prefix for all published tf frame_ids (e.g. "leader/"); empty = "<namespace>/" '
+                'or none.'
             ),
         ),
         DeclareLaunchArgument(
             'wrist_camera', default_value='true',
             description=(
-                'Launch wrist_camera_node (real hardware only). Set false if this arm has no '
-                'wrist camera fitted, to skip it entirely rather than rely on its own '
-                'no-camera-detected graceful exit. Forced off when wrist_camera_urdf is false.'
+                'Launch wrist_camera_node (real hardware only). Forced off when '
+                'wrist_camera_urdf is false.'
             ),
         ),
         DeclareLaunchArgument(
             'wrist_camera_urdf', default_value='true',
             description=(
                 'so101 only: false omits the wrist camera mount/links/joints from '
-                'robot_description, and also disables wrist_camera_node - no mount means no '
-                'camera to talk to.'
+                'robot_description (for both control and the MoveIt planning model), and also '
+                'disables wrist_camera_node.'
             ),
         ),
+        DeclareLaunchArgument(
+            'servo', default_value='false',
+            description=(
+                'Run MoveIt Servo (joint jog, streaming to forward_position_controller) instead '
+                'of planned execution; starts the stack in the servo controller mode.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'rviz', default_value='true', description='Start RViz with the MotionPlanning panel.',
+        ),
     ]
+
+    # control.launch.py spawns every motion controller but activates only this mode's.
+    controller_mode = PythonExpression(
+        ["'servo' if '", servo, "'.lower() in ('true', '1') else 'moveit'"])
 
     control = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(control_launch),
@@ -120,18 +129,25 @@ def generate_launch_description():
             'frame_prefix': frame_prefix,
             'namespace': namespace,
             'wrist_camera_urdf': wrist_camera_urdf,
+            'controller_mode': controller_mode,
         }.items(),
     )
-    teleop = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(teleop_launch),
-        launch_arguments={'frame_prefix': frame_prefix, 'namespace': namespace}.items(),
+    # switch_controllers:=false - the stack above is already in the right mode, so move_group has
+    # nothing to switch (and nothing to restore on exit).
+    move_group = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(move_group_launch),
+        launch_arguments={
+            'model': model,
+            'namespace': namespace,
+            'frame_prefix': frame_prefix,
+            'use_sim_time': use_sim_time,
+            'wrist_camera_urdf': wrist_camera_urdf,
+            'servo': servo,
+            'rviz': rviz,
+            'switch_controllers': 'false',
+        }.items(),
     )
-    record_replay = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(record_replay_launch),
-        launch_arguments={'replay_loops': replay_loops, 'namespace': namespace}.items(),
-    )
-    # Gated here, not in control.launch.py (a camera isn't control) - mock/mujoco has no camera.
-    # Also requires wrist_camera_urdf:=true - no mount in the URDF means no camera to talk to.
+    # Same gating as teleop.launch.py: no camera under mock/mujoco, none without the URDF mount.
     wrist_camera_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(wrist_camera_launch),
         launch_arguments={'namespace': namespace}.items(),
@@ -143,5 +159,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        *declared_arguments, namespace_arg(), control, teleop, record_replay, wrist_camera_node,
+        *declared_arguments, namespace_arg(), control,
+        TimerAction(period=MOVEIT_START_DELAY, actions=[move_group]), wrist_camera_node,
     ])

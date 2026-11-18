@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Wrist camera: this repo's one deployment of the generic opencv_camera_node executable. Not
-included by control.launch.py itself (a camera isn't control) - so_arm.launch.py gates it on
+included by control.launch.py itself (a camera isn't control) - teleop.launch.py and moveit.launch.py gate it on
 wrist_camera:=true + ros2_control_hardware_type:=real."""
 
 from launch import LaunchDescription

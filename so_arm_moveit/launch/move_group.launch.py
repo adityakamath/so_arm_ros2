@@ -181,9 +181,12 @@ def launch_setup(context):
 
     # An already-running control stack is put into this launch's controller mode, and back to the
     # default (teleop) on exit, per so_arm_control's controller_modes.yaml. With launch_control
-    # the stack is started in the right mode and goes down with us, so there is nothing to switch.
+    # the stack is started in the right mode and goes down with us, so there is nothing to switch;
+    # likewise switch_controllers:=false for a caller (so_arm_bringup's moveit.launch.py) that
+    # started the stack in this launch's mode itself.
     switching = []
-    if LaunchConfiguration('launch_control').perform(context).lower() not in ('true', '1'):
+    if LaunchConfiguration('switch_controllers').perform(context).lower() in ('true', '1') \
+            and LaunchConfiguration('launch_control').perform(context).lower() not in ('true', '1'):
         modes = _load_yaml(f'{pkg_ctrl}/config/controller_modes.yaml')
         motion = {c for names in modes['modes'].values() for c in names}
         manager = f"/{namespace.strip('/')}/controller_manager".replace('//', '/')
@@ -232,6 +235,10 @@ def generate_launch_description():
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('launch_control', default_value='false',
                               description='Also launch so_arm_control control.launch.py'),
+        DeclareLaunchArgument('switch_controllers', default_value='true',
+                              description='Switch an already-running control stack into this '
+                                          "launch's controller mode (and back on exit); false "
+                                          'when the caller started it in that mode already'),
         DeclareLaunchArgument('servo', default_value='false',
                               description='Run MoveIt Servo (streams to forward_position_controller) '
                                           'instead of planned execution'),

@@ -70,7 +70,7 @@ sim.step(count=200, targets={'shoulder_pan_joint': 0.3})
 
 ```bash
 colcon build --packages-up-to so_arm_bringup && . install/setup.bash
-ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco
+ros2 launch so_arm_bringup teleop.launch.py ros2_control_hardware_type:=mujoco
 ros2 launch so_arm_control control.launch.py ros2_control_hardware_type:=mujoco mujoco_headless:=true
 ```
 

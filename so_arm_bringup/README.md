@@ -6,7 +6,8 @@ Top-level orchestration for the SO-ARM100 family. One launch file starts control
 
 | Path | Purpose |
 |------|---------|
-| `launch/so_arm.launch.py` | Single-arm bringup: composes `so_arm_control`'s control + teleop with record/replay and the wrist camera |
+| `launch/teleop.launch.py` | Single-arm teleop bringup: composes `so_arm_control`'s control + teleop with record/replay and the wrist camera |
+| `launch/moveit.launch.py` | Single-arm MoveIt bringup: control in the `moveit` (or `servo`) controller mode + `so_arm_moveit`'s `move_group` and RViz, and the wrist camera |
 | `launch/leader_follower.launch.py` | Two arms under `/leader` and `/follower` namespaces; the follower tracks the leader's realized joint states |
 | `launch/record_replay.launch.py` | `record_replay_node` alone |
 | `launch/wrist_camera.launch.py` | The wrist camera driver alone |
@@ -24,11 +25,13 @@ The other SO-ARM packages (`colcon build --packages-up-to so_arm_bringup` brings
 ## Running
 
 ```bash
-ros2 launch so_arm_bringup so_arm.launch.py                                    # single arm, real hardware
-ros2 launch so_arm_bringup so_arm.launch.py model:=so100 wrist_camera:=false   # so100, no camera
-ros2 launch so_arm_bringup so_arm.launch.py use_mock:=true                     # no hardware, simulated motors
-ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco # MuJoCo
-ros2 launch so_arm_bringup so_arm.launch.py ros2_control_hardware_type:=mujoco mujoco_arena:=true  # + cubes/tray
+ros2 launch so_arm_bringup teleop.launch.py                                    # single arm, real hardware
+ros2 launch so_arm_bringup teleop.launch.py model:=so100 wrist_camera:=false   # so100, no camera
+ros2 launch so_arm_bringup teleop.launch.py use_mock:=true                     # no hardware, simulated motors
+ros2 launch so_arm_bringup teleop.launch.py ros2_control_hardware_type:=mujoco # MuJoCo
+ros2 launch so_arm_bringup teleop.launch.py ros2_control_hardware_type:=mujoco mujoco_arena:=true  # + cubes/tray
+ros2 launch so_arm_bringup moveit.launch.py                                    # MoveIt instead of teleop, real hardware
+ros2 launch so_arm_bringup moveit.launch.py use_mock:=true servo:=true         # no hardware, MoveIt Servo (joint jog)
 ros2 launch so_arm_bringup leader_follower.launch.py                           # two arms, leader-follower
 ros2 launch so_arm_bringup record_replay.launch.py                             # record/replay alone
 ros2 launch so_arm_bringup wrist_camera.launch.py                              # wrist camera alone
@@ -38,7 +41,7 @@ No wrist camera fitted? Leave `wrist_camera` at its `true` default — the drive
 
 ### Launch arguments
 
-`so_arm.launch.py` shares `model`, `serial_port`, `use_mock`, `use_sim_time`, `ros2_control_hardware_type`, `mujoco_headless`, `mujoco_arena`, `namespace` and `frame_prefix` with `so_arm_control control.launch.py` — see its [Launch arguments](../so_arm_control/README.md#launch-arguments). This adds:
+`teleop.launch.py` shares `model`, `serial_port`, `use_mock`, `use_sim_time`, `ros2_control_hardware_type`, `mujoco_headless`, `mujoco_arena`, `namespace` and `frame_prefix` with `so_arm_control control.launch.py` — see its [Launch arguments](../so_arm_control/README.md#launch-arguments). This adds:
 
 | Argument | Default | Meaning |
 |----------|---------|---------|
@@ -48,12 +51,18 @@ No wrist camera fitted? Leave `wrist_camera` at its `true` default — the drive
 
 `leader_follower.launch.py` takes `model`, `use_sim_time`, `replay_loops`, and `leader_`/`follower_`-prefixed versions of `serial_port`, `use_mock`, `ros2_control_hardware_type`, `mujoco_headless` and `mujoco_arena` for each arm independently. `wrist_camera.launch.py` takes `index_or_path` and `camera_info_url` (both empty by default, falling back to yaml).
 
+### MoveIt
+
+`moveit.launch.py` is `teleop.launch.py`'s MoveIt counterpart, not an add-on to it. MoveIt plans and executes through `arm_trajectory_controller`, while teleop, record/replay and the bridge go through `so_arm_controller`, and two controllers can't command the same joints - so one launch is one or the other, and this one has no teleop or record/replay. It starts `so_arm_control`'s `control.launch.py` directly in the `moveit` [controller mode](../so_arm_control/README.md#controller-modes) (`servo` with `servo:=true`), then `so_arm_moveit`'s `move_group.launch.py` 12 s later, once the controllers are up, with `switch_controllers:=false` since there is nothing left to switch. The wrist camera is launched as in `teleop.launch.py`.
+
+It takes the control launch's arguments (`model`, `serial_port`, `use_mock`, `use_sim_time`, `ros2_control_hardware_type`, `mujoco_*`, `namespace`, `frame_prefix`, `wrist_camera`, `wrist_camera_urdf`) plus `servo` and `rviz` (default `true`). `wrist_camera_urdf` reaches both the control stack and MoveIt's planning model, so they can't disagree. Needs MoveIt installed; `so_arm_bringup` doesn't depend on it, so `teleop.launch.py` runs without it. See [`so_arm_moveit`](../so_arm_moveit/README.md) for what MoveIt does once it is up. Switching between teleop and MoveIt needs a relaunch.
+
 ### Namespacing
 
-`namespace:=arm1` on `so_arm.launch.py` puts control, teleop, record/replay and the wrist camera all under `/arm1`, with TF frames prefixed `arm1/` (set `frame_prefix` to override that). `record_replay.launch.py` and `wrist_camera.launch.py` take `namespace` too, for launching them on their own. `leader_follower.launch.py` is the same idea with two fixed namespaces, `/leader` and `/follower`, and doesn't take `namespace`.
+`namespace:=arm1` on `teleop.launch.py` puts control, teleop, record/replay and the wrist camera all under `/arm1`, with TF frames prefixed `arm1/` (set `frame_prefix` to override that). `record_replay.launch.py` and `wrist_camera.launch.py` take `namespace` too, for launching them on their own. `leader_follower.launch.py` is the same idea with two fixed namespaces, `/leader` and `/follower`, and doesn't take `namespace`.
 
 ```bash
-ros2 launch so_arm_bringup so_arm.launch.py namespace:=arm1 use_mock:=true
+ros2 launch so_arm_bringup teleop.launch.py namespace:=arm1 use_mock:=true
 ```
 
 ## Configuration
@@ -69,7 +78,7 @@ The rest of the system is configured in the packages that own it — see `so_arm
 
 ## How it works
 
-`so_arm.launch.py` includes `so_arm_control`'s `control.launch.py` and `teleop.launch.py`, then adds `record_replay.launch.py` (always) and `wrist_camera.launch.py` (real hardware, `wrist_camera:=true`, `wrist_camera_urdf:=true`).
+`teleop.launch.py` includes `so_arm_control`'s `control.launch.py` and `teleop.launch.py`, then adds `record_replay.launch.py` (always) and `wrist_camera.launch.py` (real hardware, `wrist_camera:=true`, `wrist_camera_urdf:=true`).
 
 `leader_follower.launch.py` pushes the leader's control, teleop and record/replay into a `/leader` namespace and the follower's control into `/follower`, with a 5-second stagger so both namespaces' controller spawners don't hit the ROS graph at once. The follower gets its own `bool_toggle_node`/`joint_state_switch_node` instead of the full teleop stack: `joint_state_switch_node` arbitrates between the leader's replayed recording (redirected across the namespace boundary) and live tracking of `/leader/joint_states`, so the follower mirrors the leader by default and can independently replay a recording made from it.
 
@@ -90,4 +99,4 @@ for f in test_*.py; do pytest "$f" -q; done      # one file at a time, as CI doe
 
 Unit and config tests cover the bag recorder/player round trip, the camera node's graceful no-device handling, the leader-follower wiring, and that every launch file's arguments (including `namespace`) and yaml configs are consistent.
 
-`launch_testing` integration tests start the real stack on the mock STS hardware (`use_mock:=true`): `test_so_arm_launch.py` for the composed stack and the record/replay round trip, and `test_so_arm_namespace_launch.py`, which launches `so_arm.launch.py namespace:=arm1` and checks the nodes sit under `/arm1` exactly once (a regression guard for the doubled `/arm1/arm1` bug), the controllers and joint states are there, and every published TF frame carries the `arm1/` prefix. They need `pytest<8` for the `launch_testing` plugin (see `requirements-dev.txt`).
+`launch_testing` integration tests start the real stack on the mock STS hardware (`use_mock:=true`); `test_bringup_moveit_launch.py` starts `moveit.launch.py` and checks the stack comes up in the `moveit` controller mode with `move_group` serving `/move_action` and no teleop nodes (skipped without MoveIt). The teleop ones: `test_bringup_teleop_launch.py` for the composed stack and the record/replay round trip, and `test_bringup_teleop_namespace_launch.py`, which launches `teleop.launch.py namespace:=arm1` and checks the nodes sit under `/arm1` exactly once (a regression guard for the doubled `/arm1/arm1` bug), the controllers and joint states are there, and every published TF frame carries the `arm1/` prefix. They need `pytest<8` for the `launch_testing` plugin (see `requirements-dev.txt`).

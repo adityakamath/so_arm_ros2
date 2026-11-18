@@ -28,7 +28,7 @@ ros2 launch so_arm_control control.launch.py                       # real hardwa
 ros2 launch so_arm_moveit move_group.launch.py                     # move_group + RViz
 ```
 
-`launch_control:=true` starts the control stack from the same command (`use_mock:=true` for no hardware). In RViz, pick a goal state in the MotionPlanning panel (the `rest`, `zero`, `open` and `closed` named states are defined) and press *Plan & Execute*.
+`ros2 launch so_arm_bringup moveit.launch.py` does both in one command (control in the MoveIt mode, then `move_group` and RViz, plus the wrist camera) and takes the same options - see [`so_arm_bringup`](../so_arm_bringup/README.md#moveit). `launch_control:=true` starts the control stack from this launch file instead (`use_mock:=true` for no hardware), but only forwards `use_mock`, not the serial port or hardware type. In RViz, pick a goal state in the MotionPlanning panel (the `rest`, `zero`, `open` and `closed` named states are defined) and press *Plan & Execute*.
 
 ### Controller modes - automatic
 
@@ -55,6 +55,7 @@ Needs MoveIt installed (`ros-<distro>-moveit-*`, plus `moveit-servo` for `servo:
 | `rviz` | `true` | Start RViz |
 | `wrist_camera_urdf` | `true` | SO101 only: must match what the control launch was given, or the planning model has links the robot doesn't |
 | `servo` | `false` | Run MoveIt Servo (streams to `forward_position_controller`) instead of planned execution |
+| `switch_controllers` | `true` | Switch an already-running control stack into this launch's controller mode, and back on exit; `false` when the caller already started it in that mode (`so_arm_bringup`'s `moveit.launch.py` does) |
 | `launch_control` | `false` | Also launch `so_arm_control`'s `control.launch.py` |
 | `use_mock` | `""` | `launch_control` only: the STS driver's mock mode |
 

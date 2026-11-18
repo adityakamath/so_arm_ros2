@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""launch_testing integration test for so_arm.launch.py, the composed control+teleop stack -
+"""launch_testing integration test for teleop.launch.py, the composed control+teleop stack -
 uses use_mock:=true against ros2_control_hardware_type:=real (requires sts_hardware_interface
 built). Covers the composition itself and the record/replay filesystem round trip."""
 
@@ -31,7 +31,7 @@ _name_counter = itertools.count()
 @pytest.mark.launch_test
 def generate_test_description():
     so_arm_launch = launch.substitutions.PathJoinSubstitution([
-        launch_ros.substitutions.FindPackageShare('so_arm_bringup'), 'launch', 'so_arm.launch.py',
+        launch_ros.substitutions.FindPackageShare('so_arm_bringup'), 'launch', 'teleop.launch.py',
     ])
     so_arm = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(so_arm_launch),

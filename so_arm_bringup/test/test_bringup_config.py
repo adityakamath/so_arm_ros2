@@ -104,7 +104,7 @@ class TestLeaderOverrideYamls:
 
 # ── launch argument surface ───────────────────────────────────────────────────
 
-class TestSoArmLaunchArgs:
+class TestTeleopLaunchArgs:
     EXPECTED_ARGS = [
         'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
         'mujoco_headless', 'frame_prefix', 'namespace', 'wrist_camera', 'wrist_camera_urdf',
@@ -112,14 +112,31 @@ class TestSoArmLaunchArgs:
     ]
 
     def test_expected_args_declared(self):
-        output = _show_arguments('so_arm_bringup', 'so_arm.launch.py')
+        output = _show_arguments('so_arm_bringup', 'teleop.launch.py')
         for arg in self.EXPECTED_ARGS:
-            assert arg in output, f"Expected argument '{arg}' not in so_arm.launch.py"
+            assert arg in output, f"Expected argument '{arg}' not in teleop.launch.py"
 
     def test_model_choices_restricted_to_supported_arms(self):
-        output = _show_arguments('so_arm_bringup', 'so_arm.launch.py')
+        output = _show_arguments('so_arm_bringup', 'teleop.launch.py')
         assert 'so100' in output
         assert 'so101' in output
+
+
+class TestMoveitLaunchArgs:
+    EXPECTED_ARGS = [
+        'model', 'serial_port', 'use_mock', 'use_sim_time', 'ros2_control_hardware_type',
+        'mujoco_headless', 'frame_prefix', 'namespace', 'wrist_camera', 'wrist_camera_urdf',
+        'servo', 'rviz',
+    ]
+
+    def test_expected_args_declared(self):
+        output = _show_arguments('so_arm_bringup', 'moveit.launch.py')
+        for arg in self.EXPECTED_ARGS:
+            assert arg in output, f"Expected argument '{arg}' not in moveit.launch.py"
+
+    def test_no_teleop_only_args(self):
+        # No teleop or record/replay in the MoveIt bringup, so nothing to configure for them.
+        assert 'replay_loops' not in _show_arguments('so_arm_bringup', 'moveit.launch.py')
 
 
 class TestRecordReplayLaunchArgs:

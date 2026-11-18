@@ -196,7 +196,7 @@ class TestProcessExit(unittest.TestCase):
 
     def test_exit_codes(self, proc_info):
         # control.launch.py is control-only now (no teleop.launch.py, no joy_teleop) - see
-        # so_arm_bringup's test_so_arm_launch.py for the composed-stack exit-code test that
+        # so_arm_bringup's test_bringup_teleop_launch.py for the composed-stack exit-code test that
         # tolerates joy_teleop's own quirks.
         for info in proc_info:
             self.assertIn(

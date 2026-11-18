@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-launch_testing integration test for so_arm.launch.py's `namespace` option - the composed stack
+launch_testing integration test for teleop.launch.py's `namespace` option - the composed stack
 (control + teleop + record/replay) pushed into /arm1.
 
 Regression guard for a real bug: the composite used to push the namespace itself *and* let each
@@ -31,7 +31,7 @@ _name_counter = itertools.count()
 @pytest.mark.launch_test
 def generate_test_description():
     so_arm_launch = launch.substitutions.PathJoinSubstitution([
-        launch_ros.substitutions.FindPackageShare('so_arm_bringup'), 'launch', 'so_arm.launch.py',
+        launch_ros.substitutions.FindPackageShare('so_arm_bringup'), 'launch', 'teleop.launch.py',
     ])
     so_arm = launch.actions.IncludeLaunchDescription(
         launch.launch_description_sources.PythonLaunchDescriptionSource(so_arm_launch),
